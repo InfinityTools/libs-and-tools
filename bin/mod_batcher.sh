@@ -25,7 +25,7 @@
 ########################################
 
 # Version of mod_batcher
-app_version="1.0"
+app_version="1.1-20260206"
 
 # Function: Prints the help text to standard output.
 # Parameters: none
