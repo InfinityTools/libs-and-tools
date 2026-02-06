@@ -158,13 +158,16 @@ parse_log_entry() {
       # Optional comment
       comment="${comment#// }"
 
-      # resolve tp2 path
-      tp2_path=$(eval_path "$game_dir" "$tp2_path")
-      if [[ -n "$tp2_path" ]]; then
-        logitems+=("$tp2_path")
-        logitems+=("$lang_id")
-        logitems+=("$comp_id")
-        logitems+=("$comment")
+      # basic log entry validation
+      if [[ "$tp2_path" =~ ^.+\.[tT][pP]2$ && "$lang_id" =~ ^-?[0-9]+$ && "$comp_id" =~ ^-?[0-9]+$ ]]; then
+        # resolve tp2 path
+        tp2_path=$(eval_path "$game_dir" "$tp2_path")
+        if [[ -n "$tp2_path" ]]; then
+          logitems+=("$tp2_path")
+          logitems+=("$lang_id")
+          logitems+=("$comp_id")
+          logitems+=("$comment")
+        fi
       fi
     fi
   fi
