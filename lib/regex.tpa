@@ -1,0 +1,46 @@
+// *** control characters ***
+
+// null character: \0
+OUTER_PATCH_SAVE ~NUL~ ~ ~ BEGIN WRITE_BYTE 0 0x00 END
+// bell character: \a
+OUTER_PATCH_SAVE ~BEL~ ~ ~ BEGIN WRITE_BYTE 0 0x07 END
+// backspace: \b
+OUTER_PATCH_SAVE ~BS~ ~ ~ BEGIN WRITE_BYTE 0 0x08 END
+// vertical tab: \v
+OUTER_PATCH_SAVE ~VTAB~ ~ ~ BEGIN WRITE_BYTE 0 0x0b END
+// form feed: \f
+OUTER_PATCH_SAVE ~FF~ ~ ~ BEGIN WRITE_BYTE 0 0x0c END
+// escape: \e
+OUTER_PATCH_SAVE ~ESC~ ~ ~ BEGIN WRITE_BYTE 0 0x1b END
+// next line
+OUTER_PATCH_SAVE ~NEL~ ~ ~ BEGIN WRITE_BYTE 0 0x85 END
+// non-break space
+OUTER_PATCH_SAVE ~NBSP~ ~ ~ BEGIN WRITE_BYTE 0 0xa0 END
+
+// *** special character codes ***
+
+OUTER_SPRINT ~PERCENT~ ~%~
+OUTER_SPRINT ~QUOTE~ ~"~
+OUTER_SPRINT ~TILDE~ "~"
+
+// *** character classes ***
+
+// digit / non-digit
+OUTER_SPRINT ~\d~ ~[0-9]~
+OUTER_SPRINT ~\D~ ~[^0-9]~
+
+// horizontal whitespace / non-horizontal whitespace
+OUTER_SPRINT ~\h~ ~[ %TAB%%NBSP%]~
+OUTER_SPRINT ~\H~ ~[^ %TAB%%NBSP%]~
+
+// whitespace / non-whitespace
+OUTER_SPRINT ~\s~ ~[ %TAB%%LNL%%VTAB%%FF%%MNL%]~
+OUTER_SPRINT ~\S~ ~[^ %TAB%%LNL%%VTAB%%FF%%MNL%]~
+
+// vertical whitespace / non-vertical whitespace
+OUTER_SPRINT ~\v~ ~[%LNL%%VTAB%%FF%%MNL%%NEL%]~
+OUTER_SPRINT ~\V~ ~[^%LNL%%VTAB%%FF%%MNL%%NEL%]~
+
+// word character / non-word character
+OUTER_SPRINT ~\w~ ~[a-zA-Z_0-9]~
+OUTER_SPRINT ~\W~ ~[^a-zA-Z_0-9]~

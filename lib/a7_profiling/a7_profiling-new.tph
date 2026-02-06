@@ -1,0 +1,276 @@
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// A library for profiling WeiDU function calls (compatible with WeiDU v250 and later).
+//
+// Author:  Argent77
+// License: MIT
+//
+// Copyright 2026 Argent77
+//
+// Permission is hereby granted, free of charge, to any person obtaining 
+// a copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE
+// OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * Registers a function call.
+ *
+ * STR_VAR label          Unique identifier that is associated with a function.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#profiling_register_call
+STR_VAR label = ~~
+BEGIN
+  ACTION_IF (NOT ~%label%~ STR_EQ ~~) BEGIN
+    ACTION_IF (IS_AN_INT $a7_profiling_calls(~%label%~)) BEGIN
+      OUTER_SET GLOBAL $a7_profiling_calls(~%label%~) += 1
+    END ELSE BEGIN
+      OUTER_SET GLOBAL $a7_profiling_calls(~%label%~) = 1
+    END
+  END
+END
+
+/**
+ * Tracks a function call hierarchy.
+ *
+ * STR_VAR label          Unique identifier that is associated with a function.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#profiling_stack_call
+STR_VAR label = ~~
+BEGIN
+  ACTION_IF (NOT ~%label%~ STR_EQ ~~) BEGIN
+    // constructing or updating current function call hierarchy
+    ACTION_IF (NOT VARIABLE_IS_SET ~a7_profiling_node~) BEGIN
+      OUTER_SPRINT GLOBAL a7_profiling_node ~~
+    END
+
+    ACTION_IF (~%a7_profiling_node%~ STR_EQ ~~) BEGIN
+      OUTER_SPRINT GLOBAL a7_profiling_node ~%label%~
+    END ELSE BEGIN
+      OUTER_SPRINT GLOBAL a7_profiling_node ~%a7_profiling_node%>%label%~
+    END
+
+    // updating number of function calls
+    ACTION_IF (NOT VARIABLE_IS_SET ~a7_profiling_tree~) BEGIN
+      OUTER_SET GLOBAL a7_profiling_tree = 0
+    END
+
+    OUTER_SET match = 0
+    OUTER_FOR (i = 0; i < a7_profiling_tree; ++i) BEGIN
+      OUTER_SPRINT key $a7_profiling_tree(~%i%~)
+      ACTION_IF (~%key%~ STR_EQ ~%a7_profiling_node%~) BEGIN
+        OUTER_SET GLOBAL $a7_profiling_tree(~%i%~ ~count~) += 1
+        OUTER_SET match = 1
+        OUTER_SET i = a7_profiling_tree
+      END
+    END
+
+    ACTION_IF (NOT match) BEGIN
+      OUTER_SPRINT GLOBAL $a7_profiling_tree(~%a7_profiling_tree%~) ~%a7_profiling_node%~
+      OUTER_SET GLOBAL $a7_profiling_tree(~%a7_profiling_tree%~ ~count~) = 1
+      OUTER_SET GLOBAL a7_profiling_tree += 1
+    END
+  END
+END
+
+/**
+ * Untracks the top-level node of the current function call hierarchy and updates the call statistics.
+ *
+ * STR_VAR label          Unique identifier that is associated with a function.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#profiling_unstack_call
+STR_VAR label = ~~
+BEGIN
+  ACTION_IF (NOT ~%label%~ STR_EQ ~~) BEGIN
+    // evaluating current function call hierarchy
+    ACTION_IF (NOT VARIABLE_IS_SET ~a7_profiling_node~) BEGIN
+      OUTER_SPRINT GLOBAL a7_profiling_node ~~
+    END
+
+    OUTER_PATCH_SAVE result ~%a7_profiling_node%~ BEGIN
+      // fetching and updating existing node if available
+      REPLACE_EVALUATE CASE_SENSITIVE ~\(^\|^.+>\)\(%label%\)$~ BEGIN
+        // MATCH1: parent
+        // MATCH2: child node
+        PATCH_IF (~%MATCH1%~ STRING_MATCHES_REGEXP ~^.+>$~ == 0) BEGIN
+          LPF SUBSTRING
+            INT_VAR start = 0 length = STRING_LENGTH ~%MATCH1%~ - 1
+            STR_VAR string = EVAL ~%MATCH1%~
+            RET MATCH1 = substring
+          END
+        END
+      END ~%MATCH1%~
+    END
+    OUTER_SPRINT GLOBAL a7_profiling_node ~%result%~
+  END
+END
+
+/**
+ * Registers a function call, identified by the given label, with their parameters.
+ * It should be called before the execution of the function content.
+ *
+ * STR_VAR label          Unique identifier that is associated with a function.
+ * STR_VAR param_vars     Space-separated list of function parameter names.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#profiling_push_trace
+STR_VAR
+  label = ~~
+  param_vars = ~~
+BEGIN
+  ACTION_IF (NOT ~%label%~ STR_EQ ~~) BEGIN
+    OUTER_SPRINT line ~%label%(~
+    OUTER_SPRINT percent ~%~
+    OUTER_SET count = 0
+    // evaluating parameter list
+    OUTER_PATCH ~%param_vars%~ BEGIN
+      REPLACE_EVALUATE ~[^ %TAB%%WNL%]+~ BEGIN
+        SPRINT key ~%MATCH0%~
+        PATCH_IF (VARIABLE_IS_SET EVAL ~%key%~) BEGIN
+          SPRINT value EVAL ~%%key%%~
+          PATCH_IF (~%value%~ STRING_MATCHES_REGEXP ~^%percent%.+%percent%$~ == 0) BEGIN
+            SPRINT value EVAL ~%value%~ // needed if parameter name contains placeholders
+          END
+          PATCH_IF (NOT IS_AN_INT ~value~) BEGIN
+            SPRINT value ~"%value%"~
+          END 
+        END ELSE BEGIN
+          SPRINT value ~#undefined~
+        END
+        PATCH_IF (count > 0) BEGIN SPRINT line ~%line%, ~ END
+        SPRINT line ~%line%%key%=%value%~
+        SET count += 1
+      END ~%MATCH0%~
+    END
+    OUTER_SPRINT line ~%line%)~
+
+    // adding function definition
+    ACTION_IF (NOT VARIABLE_IS_SET ~a7_profiling_trace~) BEGIN
+      OUTER_SET GLOBAL a7_profiling_trace = 0
+    END
+    OUTER_SPRINT GLOBAL $a7_profiling_trace(~%a7_profiling_trace%~) ~%line%~
+    OUTER_SET GLOBAL a7_profiling_trace += 1
+  END
+END
+
+/**
+ * Fetches the last registered function by "a7#profiling_push_trace" matching the given label
+ * and prints it to the log with parameter and return value information.
+ * It should be called after execution of the function content.
+ *
+ * INT_VAR log_only       Whether to print the output only to the log file. (Default: 1)
+ * STR_VAR label          Unique identifier that is associated with a function.
+ * STR_VAR ret_vars       Space-separated list of function return variable names.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#profiling_pop_trace
+INT_VAR
+  log_only = 1
+STR_VAR
+  label = ~~
+  ret_vars = ~~
+BEGIN
+  ACTION_IF (NOT ~%label%~ STR_EQ ~~ && IS_AN_INT ~a7_profiling_trace~) BEGIN
+    // fetching matching function definition
+    OUTER_SPRINT line ~~
+    OUTER_SET match = 0
+    OUTER_SET remaining_idx = a7_profiling_trace
+    OUTER_FOR (idx = a7_profiling_trace - 1; NOT match && idx >= 0; --idx) BEGIN
+      OUTER_SPRINT line $a7_profiling_trace(~%idx%~)
+      ACTION_IF (~%line%~ STRING_MATCHES_REGEXP ~^%label%(.*$~ == 0) BEGIN
+        OUTER_SET match = 1
+        OUTER_SET remaining_idx = idx + 1
+      END
+    END
+    ACTION_IF (match) BEGIN
+      // moving succeeding entries in the array down one position
+      OUTER_FOR (; remaining_idx < a7_profiling_trace; ++remaining_idx) BEGIN
+        OUTER_SPRINT item $a7_profiling_trace(~%remaining_idx%~)
+        OUTER_SET prev_idx = remaining_idx - 1
+        OUTER_SPRINT GLOBAL $a7_profiling_trace(~%prev_idx%~) ~%item%~
+      END
+      OUTER_SET GLOBAL a7_profiling_trace -= 1
+    END
+
+    ACTION_IF (match) BEGIN
+      // evaluating return value list
+      OUTER_SPRINT line ~%line% => ~
+      OUTER_SPRINT percent ~%~
+      OUTER_SET count = 0
+      OUTER_PATCH ~%ret_vars%~ BEGIN
+        REPLACE_EVALUATE ~[^ %TAB%%WNL%]+~ BEGIN
+          SPRINT key ~%MATCH0%~
+          PATCH_IF (VARIABLE_IS_SET EVAL ~%key%~) BEGIN
+            SPRINT value EVAL ~%%key%%~
+            PATCH_IF (~%value%~ STRING_MATCHES_REGEXP ~^%percent%.+%percent%$~ == 0) BEGIN
+              SPRINT value EVAL ~%value%~ // needed if return value name contains placeholders
+            END
+            PATCH_IF (NOT IS_AN_INT ~value~) BEGIN
+              SPRINT value ~"%value%"~
+            END
+          END ELSE BEGIN
+            // checking if array
+            SET is_array = 0
+            PHP_EACH EVAL ~%key%~ AS _ => __ BEGIN SET is_array = 1 END
+            PATCH_IF (is_array) BEGIN
+              SPRINT value ~#array~
+            END ELSE BEGIN
+              SPRINT value ~#undefined~
+            END
+          END
+          PATCH_IF (count > 0) BEGIN SPRINT line ~%line%, ~ END
+          SPRINT line ~%line%%key%=%value%~
+          SET count += 1
+        END ~%MATCH0%~
+      END
+
+      // printing function trace
+      ACTION_IF (log_only) BEGIN
+        LOG ~%line%~
+      END ELSE BEGIN
+        PRINT ~%line%~
+      END
+    END
+  END
+END
+
+/**
+ * Returns a map of function labels and their number of calls.
+ *
+ * RET_ARRAY call_map     Map of ("<function_label> => <call_count>) entries.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#profiling_get_call_map
+RET_ARRAY call_map
+BEGIN
+  ACTION_PHP_EACH a7_profiling_calls AS label => count BEGIN
+    OUTER_SET $call_map(~%label%~) = count
+  END
+END
+
+/**
+ * Returns a map of function call hierarchies and their number of calls.
+ *
+ * RET_ARRAY hierarchy_map  Map of ("<function_call_chain> => <call_count>) entries.
+ *                          A function call chain consists of function labels separated by right angle brackets (>).
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#profiling_get_hierarchy_map
+RET_ARRAY hierarchy_map
+BEGIN
+  ACTION_IF (VARIABLE_IS_SET ~a7_profiling_tree~) BEGIN
+    OUTER_FOR (i = 0; i < a7_profiling_tree; ++i) BEGIN
+      OUTER_SPRINT label $a7_profiling_tree(~%i%~)
+      OUTER_SET count = $a7_profiling_tree(~%i%~ ~count~)
+      OUTER_SET $hierarchy_map(~%label%~) = count
+    END
+  END
+END

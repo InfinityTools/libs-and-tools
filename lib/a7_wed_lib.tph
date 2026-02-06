@@ -1,0 +1,3074 @@
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// A library for patching WED resources
+//
+// Author:  Argent77
+// License: MIT
+//
+// Copyright 2026 Argent77
+//
+// Permission is hereby granted, free of charge, to any person obtaining 
+// a copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE
+// OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+OUTER_SPRINT A7_WED_LIB_VERSION ~1.0~
+
+// *** Standalone functions ***
+// Action function that creates an empty WED file with 5 predefined empty overlay structures.
+// DEFINE_ACTION_FUNCTION a7#wed_create
+
+
+// *** Open/close functions for batch processing ***
+// Patch function that opens the current WED file and returns a WED handle for further editing.
+// IMPORTANT: Only after calling "a7#wed_open" batch functions can be used to modify WED content.
+// DEFINE_PATCH_FUNCTION a7#wed_open
+
+// Patch function that writes all modifications made by batch functions back to the WED file.
+// DEFINE_PATCH_FUNCTION a7#wed_close
+
+
+// *** Query functions ***
+// Action and patch function that returns general information about the WED handle.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_get_info
+
+// Action and patch function that returns overlay information from the WED handle.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_get_overlay
+
+// Action and patch function that returns wall polygon information from the WED handle.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_get_wall_poly
+
+// Action and patch function that returns door information from the WED handle.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_get_door
+
+// Action and patch function that returns door polygon information from the WED handle.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_get_door_poly
+
+
+// *** Patch functions ***
+// Action and patch function that assigns new tilemap definitions to an overlay structure on the WED handle.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_set_overlay
+
+// Action and patch function that alters individual tilemap definitions in an overlay structure on the WED handle.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_alter_overlay
+
+// Action and patch function that adds a new wall polygon to the WED handle.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_add_wall_poly
+
+// Action and patch function that alters base attributes of an existing wall polygon on the WED handle.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_alter_wall_poly
+
+// Action and patch function that removes a wall polygon from the WED file.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_remove_wall_poly
+
+// Action and patch function that adds a new door structure to the WED handle, with optional tilemap definitions.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_add_door
+
+// Action and patch function that alters base attributes of an existing door structure on the WED handle.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_alter_door
+
+// Action and patch function that removes a door structure from the WED handle.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_remove_door
+
+// Action and patch function that assigns new tilemap definitions to an existing door structure on the WED handle. Old tilemap definitions are replaced.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_set_door_tilemap
+
+// Action and patch function that adds a new (open or closed) polygon to an existing door structure on the WED handle.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_add_door_poly
+
+// Action and patch function that alters base attributes of an existing (open or closed) door polygon on the WED handle.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_alter_door_poly
+
+// Action and patch function that removes a (open or closed) polygon from a door structure on the WED handle.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_remove_door_poly
+
+// Action and patch function that moves a wall polygon on the WED handle by a specified amount in either direction.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_wall_poly_move
+
+// Action and patch function that moves a door polygon on the WED handle by a specified amount in either direction.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_door_poly_move
+
+// Action and patch function that scales a wall polygon on the WED handle by a specified factor in either direction.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_wall_poly_scale
+
+// Action and patch function that scales a door polygon on the WED handle by a specified factor in either direction.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_door_poly_scale
+
+// Action and patch function that explicitly rebuilds the wallgroups section on the WED handle.
+// DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_rebuild_wallgroups
+
+
+// *** Internal functions ***
+// Used internally: Validates the number of array elements.
+// DEFINE_DIMORPHIC_FUNCTION a7#__wed_validate_array
+
+// Used internally: Disassembles the current WED into the array structure "wed".
+// DEFINE_PATCH_FUNCTION a7#__wed_disassemble
+
+// Used internally: Recreates the current WED buffer by assembling the WED array structure.
+// Wallgroups are automatically recalculated before writing the WED data.
+// DEFINE_PATCH_FUNCTION a7#__wed_validate
+
+// Used internally: Validates basic elements in the specified WED array structure.
+// DEFINE_PATCH_FUNCTION a7#__wed_validate
+
+// Used internally: Recreates wallgroups in the specified WED structure.
+// DEFINE_DIMORPHIC_FUNCTION a7#__wed_build_wallgroups
+
+// Used internally: Calculates the number of wallgroups needed for the specified dimension.
+// DEFINE_DIMORPHIC_FUNCTION a7#__wed_calculate_wallgroup_count
+
+// Used internally: Determines the bounding box for a given array of vertex definitions.
+// DEFINE_DIMORPHIC_FUNCTION a7#__wed_calculate_poly_bounding_box
+
+// Used internally: Reads and normalizes the bounding box from the current polygon buffer
+// DEFINE_PATCH_MACRO a7#__wed_read_poly_bounding_box
+
+// Used internally: Checks whether the requested door entry exists, based on the specified parameters.
+// DEFINE_DIMORPHIC_FUNCTION a7#__wed_get_door_index
+
+// Used internally: Calculates and returns WED structure information (size and offset values) based on the specified wed array structure.
+// For correct size calculation the wallgroup section must have been rebuilt.
+// DEFINE_DIMORPHIC_FUNCTION a7#__wed_calculate_structure
+
+/*
+WED structure "wed": error (empty string: success; otherwise contains error message)
+- overlay: # overlay structures
+  - <idx>: raw overlay data block
+    - tm: # tilemap structures
+      - <idx>: raw tilemap data block
+        - lookup: # tilemap lookup indices defined for the current tilemap structure
+          - <idx>: tile index
+- door: # door structures
+  - <idx>: raw door data block
+    - lookup: # tilemap lookup indices
+      - <idx>: tile index
+    - poly_open: # open polygon structures
+      - <idx>: raw open polygon data block
+        - vertex: # vertex structures
+          - <idx>: combined (x,y) coordinates; as "x | (y << 16)" for ease of access
+    - poly_closed: # closed polygon structures
+      - <idx>: raw closed polygon data block
+        - vertex: # vertex structures
+          - <idx>: combined (x,y) coordinates; as "x | (y << 16)" for ease of access
+- wallpoly: # wall polygon structures
+  - <idx>: raw wall polygon data block
+    - vertex: # vertex structures
+      - <idx>: combined (x.y) coordinates; as "x | (y << 16)" for ease of access
+- wallgroup: # wallgroup structures (dynamically created array; covers wall and door polys)
+  - <idx>: # polygon indices
+    - <idx>: polygon index
+Note: Offset and start index definitions inside WED structures can be ignored. They are recalculated by the assembling process.
+*/
+
+// TODO:
+// - slight wallgroup discrepancy (probably irrelevant)
+// - performance issues when disassembling WED resources (must be fixed on WeiDU's side)
+//   - caused by an inefficient implementation of array assignments
+//    - alleviated somewhat by using batch processing
+
+
+/**
+ * Valid for array items in alter_* and set_* functions:
+ * Assign this "magic" value to vertex_* or tilemap_* definitions that shouldn't be altered.
+ */
+OUTER_SET A7_WED_NO_CHANGE = 0x7ffe7ffe
+
+
+/**
+ * Patch function that opens the current WED file and returns a WED handle for further editing.
+ *
+ * IMPORTANT: Only after calling "a7#wed_open" batch functions can be used to modify WED content.
+ *
+ * RET success            Returns 1 on success and 0 on error.
+ * RET_ARRAY wed          Returns a handle of the initialized WED structure if "success" returns 1.
+ *                        The name of this handle must be specified as parameter for the "a7#batch_xxx" functions.
+ */
+DEFINE_PATCH_FUNCTION a7#wed_open
+RET
+  success
+RET_ARRAY
+  wed
+BEGIN
+  LPF a7#__wed_disassemble RET success RET_ARRAY wed END
+END
+
+/**
+ * Patch function that writes all modifications made by batch functions back to the WED file.
+ *
+ * STR_VAR wed            Name of the WED array structure. (Default: "wed")
+ * RET success            Returns 1 on success and 0 on error.
+ */
+DEFINE_PATCH_FUNCTION a7#wed_close
+STR_VAR
+  wed = ~wed~
+RET
+  success
+BEGIN
+  LPF a7#__wed_assemble STR_VAR wed RET success END
+END
+
+
+/**
+ * Action and patch function that returns general information about the WED handle.
+ *
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * RET success            Returns 1 if the query was successful, 0 otherwise.
+ * RET num_overlays       Returns the number of available overlay structures.
+ * RET num_doors          Returns the number of available door structures.
+ * RET num_wallpolys      Returns the number of available wall polygon structures.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_get_info
+STR_VAR
+  wed = ~wed~
+RET
+  success
+  num_overlays
+  num_doors
+  num_wallpolys
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+  OUTER_SET num_overlays = "-1"
+  OUTER_SET num_doors = "-1"
+  OUTER_SET num_wallpolys = "-1"
+
+  ACTION_IF (success) BEGIN
+    OUTER_SET num_overlays = $~%wed%~(~overlay~)
+    OUTER_SET num_doors = $~%wed%~(~door~)
+    OUTER_SET num_wallpolys = $~%wed%~(~wallpoly~)
+  END
+END
+
+/**
+ * Action and patch function that returns overlay information from the WED handle.
+ *
+ * INT_VAR index          Index of the overlay structure to query information about. (Default: 0)
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * RET success            Returns 1 if the query was successful, 0 otherwise.
+ * RET_ARRAY overlay      Returns an associative array with information about the specified overlay structure.
+ *                        Structure of the array:
+ *                        - $overlay("width"): width (in tiles)
+ *                        - $overlay("height"): height (in tiles)
+ *                        - $overlay("resref"): TIS resref
+ *                        - $overlay("unique"): unique tile count
+ *                        - $overlay("type"): movement type
+ *                        - $overlay("tilemap"): number of tilemap elements
+ *                        - $overlay("tilemap" "<idx>"): number of primary tiles assigned to tilemap entry <idx> (primary tile count)
+ *                        - $overlay("tilemap" "<idx>" "<idx2>"): tile index associated with primary tile of tilemap entry <idx> (<idx2> range: 0 to <number of primary tiles minus 1>)
+ *                        - $overlay("tilemap" "<idx>" "secondary"): secondary tile index if defined, -1 otherwise
+ *                        - $overlay("tilemap" "<idx>" "flags"): overlay flags for tilemap entry <idx>
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_get_overlay
+INT_VAR
+  index = 0
+  silent = 0
+STR_VAR
+  wed = ~wed~
+RET
+  success
+RET_ARRAY
+  overlay
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+  OUTER_SET num_overlays = $~%wed%~(~overlay~)
+
+  ACTION_IF (success && (index < 0 || index >= num_overlays)) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Overlay index is out of bounds: %index%~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    // fetching overlay data
+    OUTER_SPRINT buffer $~%wed%~(~overlay~ ~%index%~)
+    OUTER_PATCH ~%buffer%~ BEGIN
+      READ_SHORT 0x00 width
+      READ_SHORT 0x02 height
+      READ_ASCII 0x04 resref (8) NULL
+      READ_SHORT 0x0c unique
+      READ_SHORT 0x0e type
+    END
+    OUTER_SET $overlay(~width~) = width
+    OUTER_SET $overlay(~height~) = height
+    OUTER_SPRINT $overlay(~resref~) ~%resref%~
+    OUTER_SET $overlay(~unique~) = unique
+    OUTER_SET $overlay(~type~) = type
+
+    // fetching tilemap data
+    OUTER_SET num_tilemaps = $~%wed%~(~overlay~ ~%index%~ ~tm~)
+    OUTER_FOR (idx = 0; idx < num_tilemaps; ++idx) BEGIN
+      OUTER_SPRINT buffer $~%wed%~(~overlay~ ~%index%~ ~tm~ ~%idx%~)
+      OUTER_PATCH ~%buffer%~ BEGIN
+        READ_SSHORT 0x04 sec
+        READ_BYTE 0x06 flags
+      END
+      OUTER_SET $overlay(~tilemap~ ~%idx%~ ~secondary~) = sec
+      OUTER_SET $overlay(~tilemap~ ~%idx%~ ~flags~) = flags
+
+      // fetching tilemap lookup indices
+      OUTER_SET num_indices = $~%wed%~(~overlay~ ~%index%~ ~tm~ ~%idx%~ ~lookup~)
+      OUTER_FOR (idx2 = 0; idx2 < num_indices; ++idx2) BEGIN
+        OUTER_SET $overlay(~tilemap~ ~%idx%~ ~%idx2%~) = $~%wed%~(~overlay~ ~%index%~ ~tm~ ~%idx%~ ~lookup~ ~%idx2%~)
+      END
+      OUTER_SET $overlay(~tilemap~ ~%idx%~) = num_indices
+    END
+    OUTER_SET $overlay(~tilemap~) = num_tilemaps
+  END
+END
+
+/**
+ * Action and patch function that returns wall polygon information from the WED handle.
+ *
+ * INT_VAR index          Index of the wall polygon structure to query information about.
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * RET success            Returns 1 if the query was successful, 0 otherwise.
+ * RET_ARRAY wallpoly     Returns an associative array with information about the specified wall polygon structure.
+ *                        Structure of the array:
+ *                        - $wallpoly("flags"): polygon flags
+ *                        - $wallpoly("height"): height
+ *                        - $wallpoly("min_x"): minimum x coordinate of the bounding box
+ *                        - $wallpoly("max_x"): maximum x coordinate of the bounding box
+ *                        - $wallpoly("min_y"): minimum y coordinate of the bounding box
+ *                        - $wallpoly("max_y"): maximum y coordinate of the bounding box
+ *                        - $wallpoly("vertex"): number of polygon vertices
+ *                        - $wallpoly("vertex" "<idx>"): vertex coordinates as combined (x | (y << 16)) values
+ *                          - How to extract x: x = (value BLSL 16) BASR 16   (double shift to preserve signedness)
+ *                          - How to extract y: y = value BASR 16
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_get_wall_poly
+INT_VAR
+  index = "-1"
+  silent = 0
+STR_VAR
+  wed = ~wed~
+RET
+  success
+RET_ARRAY
+  wallpoly
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+  OUTER_SET num_wallpolys = $~%wed%~(~wallpoly~)
+
+  ACTION_IF (success && (index < 0 || index >= num_wallpolys)) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Wall polygon index is out of bounds: %index%~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    // fetching polygon data
+    OUTER_SPRINT buffer $~%wed%~(~wallpoly~ ~%index%~)
+    OUTER_PATCH ~%buffer%~ BEGIN
+      READ_BYTE 0x08 flags
+      READ_SBYTE 0x09 height
+      READ_SSHORT 0x0a min_x
+      READ_SSHORT 0x0c max_x
+      READ_SSHORT 0x0e min_y
+      READ_SSHORT 0x10 max_y
+    END
+    OUTER_SET $wallpoly(~flags~) = flags
+    OUTER_SET $wallpoly(~height~) = height
+    OUTER_SET $wallpoly(~min_x~) = min_x
+    OUTER_SET $wallpoly(~max_x~) = max_x
+    OUTER_SET $wallpoly(~min_y~) = min_y
+    OUTER_SET $wallpoly(~max_y~) = max_y
+
+    // fetching vertex data
+    OUTER_SET num_vertices = $~%wed%~(~wallpoly~ ~%index%~ ~vertex~)
+    OUTER_FOR (idx = 0; idx < num_vertices; ++idx) BEGIN
+      OUTER_SET $wallpoly(~vertex~ ~%idx%~) = $~%wed%~(~wallpoly~ ~%index%~ ~vertex~ ~%idx%~)
+    END
+    OUTER_SET $wallpoly(~vertex~) = num_vertices
+  END
+END
+
+/**
+ * Action and patch function that returns door information from the WED handle.
+ *
+ * INT_VAR index          Index of the door structure to query information about.
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * RET success            Returns 1 if the query was successful, 0 otherwise.
+ * RET_ARRAY door         Returns an associative array with information about the specified door structure.
+ *                        Structure of the array:
+ *                        - $door("name"): Name of the door
+ *                        - $door("tilemap"): number of tilemap indices occupied by the door structure
+ *                        - $door("tilemap" "<idx>"): index of the tilemap structure
+ *                        - $door("tilemap" "<idx>" "secondary"): tile index that is used for the closed state of a door
+ *                        - $door("poly_open"): number of open state polygons
+ *                        - $door("poly_closed"): number of closed state polygons
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_get_door
+INT_VAR
+  index = "-1"
+  silent = 0
+STR_VAR
+  wed = ~wed~
+RET
+  success
+RET_ARRAY
+  door
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+  OUTER_SET num_doors = $~%wed%~(~door~)
+
+  ACTION_IF (success && (index < 0 || index >= num_doors)) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Door index is out of bounds: %index%~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    // fetching polygon data
+    OUTER_SPRINT buffer $~%wed%~(~door~ ~%index%~)
+    OUTER_PATCH ~%buffer%~ BEGIN
+      READ_ASCII 0x00 name (8) NULL
+      READ_SHORT 0x0e num_poly_open
+      READ_SHORT 0x10 num_poly_closed
+    END
+    OUTER_SPRINT $door(~name~) ~%name%~
+    OUTER_SET $door(~poly_open~) = num_poly_open
+    OUTER_SET $door(~poly_closed~) = num_poly_closed
+
+    // fetching tilemap indices
+    OUTER_SET num_indices = $~%wed%~(~door~ ~%index%~ ~lookup~)
+    OUTER_FOR (idx = 0; idx < num_indices; ++idx) BEGIN
+      OUTER_SET tm_index = $~%wed%~(~door~ ~%index%~ ~lookup~ ~%idx%~)
+      OUTER_SPRINT buffer $~%wed%~(~overlay~ ~0~ ~tm~ ~%tm_index%~)
+      OUTER_PATCH ~%buffer%~ BEGIN READ_SHORT 0x04 secondary END
+      OUTER_SET $door(~tilemap~ ~%idx%~) = tm_index
+      OUTER_SET $door(~tilemap~ ~%idx%~ ~secondary~) = secondary
+    END
+    OUTER_SET $door(~tilemap~) = num_indices
+  END
+END
+
+/**
+ * Action and patch function that returns door polygon information from the WED handle.
+ *
+ * INT_VAR door_index     Index of the door structure to query information about.
+ * INT_VAR index          Index of the (open or closed state) polygon structure to query information about.
+ * INT_VAR closed         Specify 0 to query information about an open state polygon, specify 1 to query information about an closed state polygon.
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * RET success            Returns 1 if the query was successful, 0 otherwise.
+ * RET_ARRAY doorpoly     Returns an associative array with information about the specified door polygon structure.
+ *                        Structure of the array:
+ *                        - $doorpoly("flags"): polygon flags
+ *                        - $doorpoly("height"): height
+ *                        - $doorpoly("min_x"): minimum x coordinate of the bounding box
+ *                        - $doorpoly("max_x"): maximum x coordinate of the bounding box
+ *                        - $doorpoly("min_y"): minimum y coordinate of the bounding box
+ *                        - $doorpoly("max_y"): maximum y coordinate of the bounding box
+ *                        - $doorpoly("vertex"): number of polygon vertices
+ *                        - $doorpoly("vertex" "<idx>"): vertex coordinates as combined (x | (y << 16)) values
+ *                          - How to extract x: x = (value BLSL 16) BASR 16   (double shift to preserve signedness)
+ *                          - How to extract y: y = value BASR 16
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_get_door_poly
+INT_VAR
+  door_index = "-1"
+  index = "-1"
+  closed = "-1"
+  silent = 0
+STR_VAR
+  wed = ~wed~
+RET
+  success
+RET_ARRAY
+  doorpoly
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+  OUTER_SET num_doors = $~%wed%~(~door~)
+
+  ACTION_IF (success && (door_index < 0 || door_index >= num_doors)) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Door index is out of bounds: %door_index%~
+    END
+  END
+
+  ACTION_IF (success && closed == "-1") BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Polygon type (open / closed) was not specified~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    ACTION_DEFINE_ARRAY doorpoly_name BEGIN ~poly_open~ ~poly_closed~ END
+    OUTER_SET type = (closed != 0)
+    OUTER_SPRINT poly_name $doorpoly_name(~%type%~)
+    OUTER_SET num_polys = $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~)
+    ACTION_IF (index < 0 || index >= num_polys) BEGIN
+      OUTER_SET success = 0
+      ACTION_IF (NOT silent) BEGIN
+        WARN ~WARNING: Polygon index is out of bounds: %index%~
+      END
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    OUTER_SPRINT buffer $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%index%~)
+    OUTER_PATCH ~%buffer%~ BEGIN
+      READ_BYTE 0x08 flags
+      READ_SBYTE 0x09 height
+      READ_SSHORT 0x0a min_x
+      READ_SSHORT 0x0c max_x
+      READ_SSHORT 0x0e min_y
+      READ_SSHORT 0x10 max_y
+    END
+    OUTER_SET $doorpoly(~flags~) = flags
+    OUTER_SET $doorpoly(~height~) = height
+    OUTER_SET $doorpoly(~min_x~) = min_x
+    OUTER_SET $doorpoly(~max_x~) = max_x
+    OUTER_SET $doorpoly(~min_y~) = min_y
+    OUTER_SET $doorpoly(~max_y~) = max_y
+
+    // fetching vertex data
+    OUTER_SET num_vertices = $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%index%~ ~vertex~)
+    OUTER_FOR (idx = 0; idx < num_vertices; ++idx) BEGIN
+      OUTER_SET $doorpoly(~vertex~ ~%idx%~) = $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%index%~ ~vertex~ ~%idx%~)
+    END
+    OUTER_SET $doorpoly(~vertex~) = num_vertices
+  END
+END
+
+
+/**
+ * Action function that creates an empty WED file with 5 predefined empty overlay structures.
+ *
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR resref         Resource reference of the resulting WED file. Length must not exceed 8 characters.
+ * STR_VAR path           Destination folder for WED file. (Default: "override")
+ * RET success            Returns 1 if the operation was successful, 0 otherwise.
+ */
+DEFINE_ACTION_FUNCTION a7#wed_create
+INT_VAR
+  silent = 0
+STR_VAR
+  resref = ~~
+  path = ~override~
+RET
+  success
+BEGIN
+  OUTER_SET success = 1
+
+  ACTION_IF (~%resref%~ STR_EQ ~~) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: No resref specified.~
+    END
+  END ELSE ACTION_IF (STRING_LENGTH ~%resref%~ > 8) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: resref name is too long.~
+    END
+  END
+
+  ACTION_IF (~%path%~ STR_EQ ~~) BEGIN
+    // failsafe path definition to prevent file creation in the system's root folder
+    OUTER_SPRINT path ~.~
+  END
+
+  ACTION_IF (success) BEGIN
+<<<<<<<< .../inlined/a7_wed_lib/blank
+>>>>>>>>
+    COPY ~.../inlined/a7_wed_lib/blank~ ~%path%/%resref%.wed~
+      SET size_wed = 172
+
+      DELETE_BYTES 0 BUFFER_LENGTH
+      INSERT_BYTES 0 size_wed
+      WRITE_ASCII 0 ~WED V1.3~ (8)
+
+      // initial primary header values
+      SET cur_ofs = 0x08
+      PATCH_FOR_EACH value IN 5 0 0x20 0x98 0xac ~%size_wed%~ BEGIN
+        WRITE_LONG cur_ofs value
+        SET cur_ofs += 4
+      END
+
+      // initial secondary header values
+      SET cur_ofs = 0x98
+      PATCH_FOR_EACH value IN 0 ~%size_wed%~ ~%size_wed%~ ~%size_wed%~ ~%size_wed%~ BEGIN
+        WRITE_LONG cur_ofs value
+        SET cur_ofs += 4
+      END
+
+      // default overlay structures
+      SET cur_ofs = 0x20
+      FOR (i = 0; i < 5; ++i) BEGIN
+        WRITE_LONG (cur_ofs + 0x10) size_wed
+        WRITE_LONG (cur_ofs + 0x14) size_wed
+        SET cur_ofs += 24
+      END
+  END
+END
+
+
+/**
+ * Action and patch function that assigns new tilemap definitions to an overlay structure on the WED handle.
+ *
+ * INT_VAR overlay_index  Index of the overlay structure where the tilemap definitions should by assigned to.
+ *                        New overlay structures are inserted if needed. Allowed range: 0 - 7
+ * INT_VAR width          Width of the overlay, in tiles. (Default: 1)
+ * INT_VAR height         Height of the overlay, in tiles. (Default: 1)
+ * INT_VAR unique         Unique tile count. (Default: 0)
+ * INT_VAR type           Movement type. Available types: 0=Default, 1=Disabled, 2=Alternate. (Default: 0)
+ * INT_VAR tilemap_0, ... Array "tilemap" with "num_tilemaps" entries. Number of required entries is calculated
+ *                        from width × height.
+ *                        Tilemap entries allow you to define optional fields for more fine-tuning:
+ *                        - "tilemap_x" itself contains the primary tilemap (start) index value.
+ *                        - "tilemap_x_count" defines the count of tiles for the primary tile. (Default: 1)
+ *                        - "tilemap_x_y" defines "count" tile indices for the primary tile, where "y" ranges
+ *                          from 0 to "count" - 1. For non-existing definitions it is assumed that tile index is
+ *                          equal to tilemap index.
+ *                        - "tilemap_x_second" defines a secondary (alternate) tile index. (Default: -1)
+ *                        - "tilemap_x_flags" defines the overlay layer(s) to use. (Default: 0)
+ *                        Alternate notation: $tilemap("0"), $tilemap("0", "count"), $tilemap("0", "0"), ...
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * STR_VAR tileset        Resref of the associated tileset (TIS) file. (Default: [empty])
+ * RET success            Returns 1 if the operation was successful, 0 otherwise.
+ * RET_ARRAY %wed%        Returns the updated WED handle. Specify the actual name of the WED handle that is returned by "a7#wed_open"
+ *                        (which is "wed" by default).
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_set_overlay
+INT_VAR
+  overlay_index = "-1"
+  width = 1
+  height = 1
+  unique = 0
+  type = 0
+  // tilemap_0 = 0
+  // tilemap_0_count = 1
+  // tilemap_0_second = "-1"
+  // tilemap_0_flags = 0
+  // ...
+  // tilemap_index_0 = 0
+  // ...
+  silent = 0
+STR_VAR
+  wed = ~wed~
+  tileset = ~~
+RET
+  success
+RET_ARRAY
+  ~%wed%~
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+
+  ACTION_IF (success && (overlay_index < 0 || overlay_index > 7)) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Overlay index is out of bounds: %overlay_index%~
+    END
+  END
+
+  ACTION_IF (success && (width < 0 || width > 32767 || height < 0 || height > 32767)) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Overlay dimension is out of bounds (width: %width%, height: %height%)~
+    END
+  END
+
+  ACTION_IF (success && width > 80 && NOT silent) BEGIN
+    WARN ~WARNING: Tileset width should not be greater than 80 (found: %width%)~
+  END
+
+  ACTION_IF (success && height > 60 && NOT silent) BEGIN
+    WARN ~WARNING: Tileset height should not be greater than 60 (found: %height%)~
+  END
+
+  ACTION_IF (STRING_LENGTH ~%tileset%~ > 8) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Tileset resref must not exceed 8 characters~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    // validating "tilemap" array
+    OUTER_SET num_tilemaps = width * height
+    LAF a7#__wed_validate_array INT_VAR count = num_tilemaps STR_VAR name = ~tilemap~ RET result END
+    ACTION_IF (result < num_tilemaps) BEGIN
+      OUTER_SET success = 0
+      ACTION_IF (NOT silent) BEGIN
+        WARN ~WARNING: Not enough tilemap entries defined (expected: %num_tilemaps%, found: %result%)~
+      END
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    // adding more overlay structures if needed
+    OUTER_SET num_overlays = $~%wed%~(~overlay~)
+    ACTION_IF (overlay_index >= num_overlays) BEGIN
+      // expanding list of overlay structures
+      OUTER_FOR (idx = num_overlays; idx <= overlay_index; ++idx) BEGIN
+        OUTER_PATCH_SAVE buffer ~~ BEGIN INSERT_BYTES 0 24 END
+        OUTER_SPRINT $~%wed%~(~overlay~ ~%idx%~) ~%buffer%~
+        OUTER_SET $~%wed%~(~overlay~ ~%idx%~ ~tm~) = 0
+        OUTER_SET $~%wed%~(~overlay~) += 1
+      END
+    END
+
+    // removing old overlay data
+    OUTER_SET $~%wed%~(~overlay~ ~%overlay_index%~ ~tm~) = 0
+  END
+
+  ACTION_IF (success) BEGIN
+    // setting up overlay structure
+    OUTER_SPRINT buffer $~%wed%~(~overlay~ ~%overlay_index%~)
+    OUTER_PATCH_SAVE buffer ~%buffer%~ BEGIN
+      WRITE_SHORT 0x00 width
+      WRITE_SHORT 0x02 height
+      WRITE_ASCIIE 0x04 ~%tileset%~ (8)
+      WRITE_SHORT 0x0c unique
+      WRITE_SHORT 0x0e type
+    END
+    OUTER_SPRINT $~%wed%~(~overlay~ ~%overlay_index%~) ~%buffer%~
+
+    // setting up tilemap structures
+    OUTER_FOR (idx_tm = 0; idx_tm < num_tilemaps; ++idx_tm) BEGIN
+      OUTER_PATCH_SAVE buffer ~~ BEGIN
+        INSERT_BYTES 0 10
+        SET tm_pri = IS_AN_INT $tilemap(~%idx_tm%~) ? $tilemap(~%idx_tm%~) : idx_tm
+        SET tm_cnt = IS_AN_INT $tilemap(~%idx_tm%~ ~count~) ? $tilemap(~%idx_tm%~ ~count~) : 1
+        SET tm_sec = IS_AN_INT $tilemap(~%idx_tm%~ ~second~) ? $tilemap(~%idx_tm%~ ~second~) : "-1"
+        SET tm_flags = IS_AN_INT $tilemap(~%idx_tm%~ ~flags~) ? $tilemap(~%idx_tm%~ ~flags~) : 0
+        WRITE_SHORT 0x00 tm_pri
+        WRITE_SHORT 0x02 tm_cnt
+        WRITE_SHORT 0x04 tm_sec
+        WRITE_BYTE 0x06 tm_flags
+      END
+      OUTER_SPRINT $~%wed%~(~overlay~ ~%overlay_index%~ ~tm~ ~%idx_tm%~) ~%buffer%~
+
+      // setting up tilemap index structures
+      OUTER_FOR (idx_tmi = 0; idx_tmi < tm_cnt; ++idx_tmi) BEGIN
+        OUTER_SET value = VARIABLE_IS_SET $tilemap(~%idx_tm%~ ~%idx_tmi%~) ? $tilemap(~%idx_tm%~ ~%idx_tmi%~) : tm_pri + idx_tmi
+        OUTER_SET $~%wed%~(~overlay~ ~%overlay_index%~ ~tm~ ~%idx_tm%~ ~lookup~ ~%idx_tmi%~) = value
+      END
+      OUTER_SET $~%wed%~(~overlay~ ~%overlay_index%~ ~tm~ ~%idx_tm%~ ~lookup~) = tm_cnt
+    END
+
+    OUTER_SET $~%wed%~(~overlay~ ~%overlay_index%~ ~tm~) = num_tilemaps
+  END
+END
+
+/**
+ * Action and patch function that alters individual tilemap definitions in an overlay structure on the WED handle.
+ *
+ * INT_VAR overlay_index  Index of the overlay structure where tilemap definitions should by updated.
+ * INT_VAR tilemap_0, ... Tilemap definition that should be altered. Index specifies the tilemap index.
+ *                        Tilemap entries allow you to define optional fields for more fine-tuning:
+ *                        - "tilemap_x" itself contains the primary tilemap (start) index value.
+ *                        - "tilemap_x_count" defines the count of tiles for the primary tile. (Default: 1)
+ *                        - "tilemap_x_y" defines "count" tile indices for the primary tile, where "y" ranges from 0 to "count" - 1.
+ *                        - "tilemap_x_second" defines a secondary (alternate) tile index. (Default: -1)
+ *                        - "tilemap_x_flags" defines the overlay layer(s) to use. (Default: 0)
+ *                        Alternate notation: $tilemap("0"), $tilemap("0" "count"), ...
+ *                        Skip entries or assign the constant "A7_WED_NO_CHANGE" to "tilemap_x" to keep the original tilemap value.
+ *                        Definitions for non-existing tilemap entries are ignored.
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * RET success            Returns 1 if the operation was successful, 0 otherwise.
+ * RET_ARRAY %wed%        Returns the updated WED handle. Specify the actual name of the WED handle that is returned by "a7#wed_open"
+ *                        (which is "wed" by default).
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_alter_overlay
+INT_VAR
+  overlay_index = "-1"
+  // tilemap_0 = 0
+  // tilemap_0_count = 1
+  // tilemap_0_0 = 0
+  // tilemap_0_second = "-1"
+  // tilemap_0_flags = 0
+  // ...
+STR_VAR
+  wed = ~wed~
+RET
+  success
+RET_ARRAY
+  ~%wed%~
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+
+  ACTION_IF (success && (overlay_index < 0 || overlay_index >= $~%wed%~(~overlay~))) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Overlay index is out of bounds: %overlay_index%~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+      OUTER_SPRINT buffer $~%wed%~(~overlay~ ~%overlay_index%~)
+      OUTER_PATCH ~%buffer%~ BEGIN
+        READ_SHORT 0x00 width
+        READ_SHORT 0x02 height
+      END
+      OUTER_SET num_tilemaps = width * height
+      OUTER_FOR (idx_tm = 0; idx_tm < num_tilemaps; ++idx_tm) BEGIN
+        // updating tilemap entry
+        OUTER_SET pri = VARIABLE_IS_SET $tilemap(~%idx_tm%~) ? $tilemap(~%idx_tm%~) : A7_WED_NO_CHANGE
+        ACTION_IF (pri != A7_WED_NO_CHANGE) BEGIN
+          OUTER_SET cnt = VARIABLE_IS_SET $tilemap(~%idx_tm%~ ~count~) ? $tilemap(~%idx_tm%~ ~count~) : A7_WED_NO_CHANGE
+          OUTER_SET sec = VARIABLE_IS_SET $tilemap(~%idx_tm%~ ~second~) ? $tilemap(~%idx_tm%~ ~second~) : A7_WED_NO_CHANGE
+          OUTER_SET flags = VARIABLE_IS_SET $tilemap(~%idx_tm%~ ~flags~) ? $tilemap(~%idx_tm%~ ~flags~) : A7_WED_NO_CHANGE
+
+          OUTER_SPRINT buffer $~%wed%~(~overlay~ ~%overlay_index%~ ~tm~ ~%idx_tm%~)
+          OUTER_PATCH_SAVE buffer ~%buffer%~ BEGIN
+            PATCH_IF (pri != A7_WED_NO_CHANGE) BEGIN WRITE_SHORT 0x00 pri END
+            PATCH_IF (cnt != A7_WED_NO_CHANGE) BEGIN WRITE_SHORT 0x02 cnt END
+            PATCH_IF (sec != A7_WED_NO_CHANGE) BEGIN WRITE_SHORT 0x04 sec END
+            PATCH_IF (flags != A7_WED_NO_CHANGE) BEGIN WRITE_BYTE 0x06 flags END
+          END
+          OUTER_SPRINT $~%wed%~(~overlay~ ~%overlay_index%~ ~tm~ ~%idx_tm%~) ~%buffer%~
+
+          // updating tile indices
+          ACTION_IF (cnt != A7_WED_NO_CHANGE) BEGIN
+            OUTER_FOR (idx_tmi = 0; idx_tmi < cnt; ++idx_tmi) BEGIN
+              OUTER_SET value = VARIABLE_IS_SET $tilemap(~%idx_tm%~ ~%idx_tmi%~) ? $tilemap(~%idx_tm%~ ~%idx_tmi%~) : pri + idx_tmi
+              OUTER_SET $~%wed%~(~overlay~ ~%overlay_index%~ ~tm~ ~%idx_tm%~ ~lookup~ ~%idx_tmi%~) = value
+            END
+            OUTER_SET $~%wed%~(~overlay~ ~%overlay_index%~ ~tm~ ~%idx_tm%~ ~lookup~) = cnt
+          END
+        END
+      END
+  END
+END
+
+/**
+ * Action and patch function that adds a new wall polygon to the WED handle.
+ *
+ * INT_VAR flags          Polygon flags. (Default: 0)
+ * INT_VAR height         Polygon height. (Default: -1)
+ * INT_VAR num_vertices   Number of vertices to add. (Default: 0)
+ * INT_VAR vertex_0, ...  Array "vertex" with "num_vertices" vertex coordinates,
+ *                        as "X coordinate | (Y coordinate << 16)".
+ *                        Alternate notation: $vertex("0"), ...
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * RET success            Returns 1 if the operation was successful, 0 otherwise.
+ * RET index              Returns the index of the added wall polygon if successful, -1 otherwise.
+ * RET_ARRAY %wed%        Returns the updated WED handle. Specify the actual name of the WED handle that is returned by "a7#wed_open"
+ *                        (which is "wed" by default).
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_add_wall_poly
+INT_VAR
+  flags = 0
+  height = "-1"
+  num_vertices = 0
+  // vertex_0 = x | (y << 16) ...
+  silent = 0
+STR_VAR
+  wed = ~wed~
+RET
+  success
+  index
+RET_ARRAY
+  ~%wed%~
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+  OUTER_SET index = "-1"
+
+  ACTION_IF (success && num_vertices < 0) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Negative number of vertices not allowed: %num_vertices%~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    // validating vertex array
+    LAF a7#__wed_validate_array INT_VAR count = num_vertices STR_VAR name = ~vertex~ RET result END
+    ACTION_IF (result < num_vertices) BEGIN
+      OUTER_SET success = 0
+      ACTION_IF (NOT silent) BEGIN
+        WARN ~WARNING: Not enough vertex entries defined (expected: %num_vertices%, found: %result%)~
+      END
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    // setting up polygon
+    OUTER_SET index = $~%wed%~(~wallpoly~)
+    OUTER_PATCH_SAVE buffer ~~ BEGIN
+      INSERT_BYTES 0 18
+      WRITE_LONG 0x04 num_vertices
+      WRITE_BYTE 0x08 flags
+      WRITE_BYTE 0x09 height
+      LPF a7#__wed_calculate_poly_bounding_box INT_VAR count = num_vertices STR_VAR array = ~vertex~ RET min_x max_x min_y max_y END
+      WRITE_SHORT 0x0a min_x
+      WRITE_SHORT 0x0c max_x
+      WRITE_SHORT 0x0e min_y
+      WRITE_SHORT 0x10 max_y
+    END
+    OUTER_SPRINT $~%wed%~(~wallpoly~ ~%index%~) ~%buffer%~
+
+    // setting up vertices
+    OUTER_SET prev_value = 0
+    OUTER_FOR (idx = 0; idx < num_vertices; ++idx) BEGIN
+      OUTER_SET value = IS_AN_INT $vertex(~%idx%~) ? $vertex(~%idx%~) : prev_value
+      OUTER_SET $~%wed%~(~wallpoly~ ~%index%~ ~vertex~ ~%idx%~) = value
+      OUTER_SET prev_value = value
+    END
+    OUTER_SET $~%wed%~(~wallpoly~ ~%index%~ ~vertex~) = num_vertices
+
+    OUTER_SET $~%wed%~(~wallpoly~) += 1
+  END
+END
+
+/**
+ * Action and patch function that alters base attributes of an existing wall polygon on the WED handle.
+ *
+ * INT_VAR polygon_index  Index of the wall polygon to patch.
+ * INT_VAR flags          New polygon flags. (Default: no change)
+ * INT_VAR height         New polygon height. (Default: no change)
+ * INT_VAR num_vertices   New number of vertices. If this parameter is specified then the current polygon
+ *                        vertices are updated with the specified vertex definitions. (Default: no change)
+ * INT_VAR vertex_0, ...  Array "vertex" with "num_vertices" vertex coordinates,
+ *                        as "X coordinate | (Y coordinate << 16)".
+ *                        Alternate notation: $vertex("0"), ...
+ *                        Skip entries or assign the constant "A7_WED_NO_CHANGE" to keep the original vertex value.
+ *                        Skipping definitions or using the constant for non-existing vertices will trigger an error.
+ *                        This array is only considered if "num_vertices" is defined.
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * RET success            Returns 1 if the operation was successful, 0 otherwise.
+ * RET_ARRAY %wed%        Returns the updated WED handle. Specify the actual name of the WED handle that is returned by "a7#wed_open"
+ *                        (which is "wed" by default).
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_alter_wall_poly
+INT_VAR
+  polygon_index = "-1"
+  flags = 0x100
+  height = 0x100
+  num_vertices = "-1"
+  // vertex_0 = x | (y << 16) ...
+  silent = 0
+STR_VAR
+  wed = ~wed~
+RET
+  success
+RET_ARRAY
+  ~%wed%~
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+  OUTER_SET num_wallpolys = success ? $~%wed%~(~wallpoly~) : 0
+
+  ACTION_IF (success && (polygon_index < 0 || polygon_index >= num_wallpolys)) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Polygon index is out of bounds: %polygon_index%~
+    END
+  END
+
+  ACTION_IF (success && num_vertices >= 0) BEGIN
+    // validating vertex array
+    OUTER_SET num_vertices_old = $~%wed%~(~wallpoly~ ~%polygon_index%~ ~vertex~)
+    OUTER_FOR (idx = 0; idx < num_vertices; ++idx) BEGIN
+      OUTER_SET value = VARIABLE_IS_SET $vertex(~%idx%~) ? $vertex(~%idx%~) : A7_WED_NO_CHANGE
+      ACTION_IF (idx >= num_vertices_old && value == A7_WED_NO_CHANGE) BEGIN
+        OUTER_SET success = 0
+        ACTION_IF (NOT silent) BEGIN
+          WARN ~WARNING: Not enough vertex entries defined (expected: %num_vertices%, found: %idx%)~
+        END
+        OUTER_SET idx = num_vertices
+      END ELSE ACTION_IF (value == A7_WED_NO_CHANGE) BEGIN
+        // resolving placeholder constant
+        OUTER_SET $vertex(~%idx%~) = $~%wed%~(~wallpoly~ ~%polygon_index%~ ~vertex~ ~%idx%~)
+      END
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    // patching polygon
+    OUTER_SPRINT buffer $~%wed%~(~wallpoly~ ~%polygon_index%~)
+    OUTER_PATCH_SAVE buffer ~%buffer%~ BEGIN
+      PATCH_IF (flags != 0x100) BEGIN
+        WRITE_BYTE 0x08 flags
+      END
+      PATCH_IF (height != 0x100) BEGIN
+        WRITE_BYTE 0x09 height
+      END
+      PATCH_IF (num_vertices >= 0) BEGIN
+        WRITE_LONG 0x04 num_vertices
+        LPF a7#__wed_calculate_poly_bounding_box INT_VAR count = num_vertices STR_VAR array = ~vertex~ RET min_x max_x min_y max_y END
+        WRITE_SHORT 0x0a min_x
+        WRITE_SHORT 0x0c max_x
+        WRITE_SHORT 0x0e min_y
+        WRITE_SHORT 0x10 max_y
+      END
+    END
+    OUTER_SPRINT $~%wed%~(~wallpoly~ ~%polygon_index%~) ~%buffer%~
+
+    ACTION_IF (num_vertices >= 0) BEGIN
+      // patching vertices
+      OUTER_SET prev_value = 0
+      OUTER_FOR (idx = 0; idx < num_vertices; ++idx) BEGIN
+        OUTER_SET value = IS_AN_INT $vertex(~%idx%~) ? $vertex(~%idx%~) : prev_value
+        OUTER_SET $~%wed%~(~wallpoly~ ~%polygon_index%~ ~vertex~ ~%idx%~) = value
+        OUTER_SET prev_value = value
+      END
+      OUTER_SET $~%wed%~(~wallpoly~ ~%polygon_index%~ ~vertex~) = num_vertices
+    END
+  END
+END
+
+/**
+ * Action and patch function that removes a wall polygon from the WED handle.
+ *
+ * INT_VAR polygon_index  Index of the wall polygon structure to remove.
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * RET success            Returns 1 if the operation was successful, 0 otherwise.
+ * RET_ARRAY %wed%        Returns the updated WED handle. Specify the actual name of the WED handle that is returned by "a7#wed_open"
+ *                        (which is "wed" by default).
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_remove_wall_poly
+INT_VAR
+  polygon_index = "-1"
+  silent = 0
+STR_VAR
+  wed = ~wed~
+RET
+  success
+RET_ARRAY
+  ~%wed%~
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+  OUTER_SET num_wallpolys = success ? $~%wed%~(~wallpoly~) : 0
+
+  ACTION_IF (success && (polygon_index < 0 || polygon_index >= num_wallpolys)) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Polygon index is out of bounds: %polygon_index%~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    // moving subsequent polygon entries down by one index
+    OUTER_FOR (idx = polygon_index + 1; idx < num_wallpolys; ++idx) BEGIN
+      OUTER_SET prev_idx = idx - 1
+      OUTER_SPRINT buffer $~%wed%~(~wallpoly~ ~%idx%~)
+      OUTER_SPRINT $~%wed%~(~wallpoly~ ~%prev_idx%~) ~%buffer%~
+
+      // moving vertex list
+      OUTER_SET num_vertices = $~%wed%~(~wallpoly~ ~%idx%~ ~vertex~)
+      OUTER_FOR (idx2 = 0; idx2 < num_vertices; ++idx2) BEGIN
+        OUTER_SET $~%wed%~(~wallpoly~ ~%prev_idx%~ ~vertex~ ~%idx2%~) = $~%wed%~(~wallpoly~ ~%idx%~ ~vertex~ ~%idx2%~)
+      END
+      OUTER_SET $~%wed%~(~wallpoly~ ~%prev_idx%~ ~vertex~) = num_vertices
+    END
+
+    OUTER_SET $~%wed%~(~wallpoly~) -= 1
+  END
+END
+
+/**
+ * Action and patch function that adds a new door structure to the WED handle, with optional tilemap definitions.
+ *
+ * INT_VAR num_tilemaps   Number of tilemap entries to add. (Default: 0)
+ * INT_VAR tilemap_0, ... Array "tilemap" with "num_tilemaps" tilemap indices.
+ *                        The following optional field is supported:
+ *                        - "tilemap_x_swap" indicates whether primary and secondary tile indices should
+ *                          swap places. It allows to reverse the open/closed states of door tiles. (Default: 0)
+ *                        Alternate notation: $tilemap("0"), $tilemap("0" "swap"), ...
+ * INT_VAR tile_0, ...    Array "tile" with secondary tile indices, one for each tilemap definition,
+ *                        that applied to the overlay tilemap structures.
+ *                        Alternate notation: $tile("0"), ...
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR door_name      Name of the door structure. May not be longer than 8 characters.
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * RET success            Returns 1 if the operation was successful, 0 otherwise.
+ * RET index              Returns the index of the added door structure if successful, -1 otherwise.
+ * RET_ARRAY %wed%        Returns the updated WED handle. Specify the actual name of the WED handle that is returned by "a7#wed_open"
+ *                        (which is "wed" by default).
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_add_door
+INT_VAR
+  num_tilemaps = 0
+  // tilemap_0 = 0
+  // tilemap_0_swap = 0
+  // ...
+  // tile_0 = 0
+  // ...
+  silent = 0
+STR_VAR
+  wed = ~wed~
+  door_name = ~~
+RET
+  success
+  index
+RET_ARRAY
+  ~%wed%~
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+  OUTER_SET index = "-1"
+
+  ACTION_IF (success && num_tilemaps < 0) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Negative number of tilemap indices not allowed: %num_tilemaps%~
+    END
+  END
+
+  ACTION_IF (success && ~%door_name%~ STR_EQ ~~) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Door name not specified~
+    END
+  END
+
+  ACTION_IF (success && STRING_LENGTH ~%door_name%~ > 8) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Door name must not exceed 8 characters~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    // validating tilemap arrays
+    LAF a7#__wed_validate_array INT_VAR count = num_tilemaps STR_VAR name = ~tilemap~ RET result1 = result END
+    LAF a7#__wed_validate_array INT_VAR count = num_tilemaps STR_VAR name = ~tile~ RET result2 = result END
+    ACTION_IF (result1 < num_tilemaps || result2 < num_tilemaps) BEGIN
+      OUTER_SET success = 0
+      ACTION_IF (NOT silent) BEGIN
+        ACTION_IF (result1 < num_tilemaps) BEGIN
+          WARN ~WARNING: Not enough tilemap entries defined (expected: %num_tilemaps%, found: %result1%)~
+        END
+        ACTION_IF (result2 < num_tilemaps) BEGIN
+          WARN ~WARNING: Not enough tile index entries defined (expected: %num_tilemaps%, found: %result2%)~
+        END
+      END
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    // adding door
+    OUTER_SET index = $~%wed%~(~door~)
+    OUTER_PATCH_SAVE buffer ~~ BEGIN
+      INSERT_BYTES 0 26
+      WRITE_ASCIIE 0x00 ~%door_name%~ (8)
+      WRITE_SHORT 0x08 1  // is door?
+    END
+    OUTER_SPRINT $~%wed%~(~door~ ~%index%~) ~%buffer%~
+    OUTER_SET $~%wed%~(~door~ ~%index%~ ~lookup~) = 0
+    OUTER_SET $~%wed%~(~door~ ~%index%~ ~poly_open~) = 0
+    OUTER_SET $~%wed%~(~door~ ~%index%~ ~poly_closed~) = 0
+    OUTER_SET $~%wed%~(~door~) += 1
+
+    // adding door tile indices
+    ACTION_IF (num_tilemaps > 0) BEGIN
+      LAF a7#batch_wed_set_door_tilemap
+        INT_VAR door_index = index num_tilemaps silent
+        STR_VAR wed
+        RET success
+        RET_ARRAY ~%wed%~
+      END
+    END
+  END
+END
+
+/**
+ * Action and patch function that alters base attributes of an existing door structure on the WED handle.
+ *
+ * INT_VAR door_index     Index of the door structure to patch. Omit if you specify the door structure by name.
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * STR_VAR door_name      Name of the door structure to patch. Omit if you specify the door structure by index.
+ * STR_VAR name           New name of the door structure. (Default: no change)
+ * RET success            Returns 1 if the operation was successful, 0 otherwise.
+ * RET_ARRAY %wed%        Returns the updated WED handle. Specify the actual name of the WED handle that is returned by "a7#wed_open"
+ *                        (which is "wed" by default).
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_alter_door
+INT_VAR
+  door_index = "-1"
+  silent = 0
+STR_VAR
+  wed = ~wed~
+  door_name = ~~
+  name = ~~
+RET
+  success
+RET_ARRAY
+  ~%wed%~
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+
+  ACTION_IF (success) BEGIN
+    LAF a7#__wed_get_door_index INT_VAR door_index silent STR_VAR wed door_name RET success door_index END
+  END
+
+  ACTION_IF (success && STRING_LENGTH ~%name%~ > 8) BEGIN
+    OUTER_SET success = 0
+    WARN ~WARNING: New door name must not exceed 8 characters~
+  END
+
+  ACTION_IF (success) BEGIN
+    OUTER_SPRINT buffer $~%wed%~(~door~ ~%door_index%~)
+    OUTER_PATCH_SAVE buffer ~%buffer%~ BEGIN
+      PATCH_IF (NOT ~%name%~ STR_EQ ~~) BEGIN
+        WRITE_ASCIIE 0x00 ~%name%~ (8)
+      END
+    END
+    OUTER_SPRINT $~%wed%~(~door~ ~%door_index%~) ~%buffer%~
+  END
+END
+
+/**
+ * Action and patch function that removes a door structure from the WED handle.
+ *
+ * INT_VAR door_index     Index of the door structure to remove. Omit if you specify the door structure by name.
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * STR_VAR door_name      Name of the door structure to remove. Omit if you specify the door structure by index.
+ * RET success            Returns 1 if the operation was successful, 0 otherwise.
+ * RET_ARRAY %wed%        Returns the updated WED handle. Specify the actual name of the WED handle that is returned by "a7#wed_open"
+ *                        (which is "wed" by default).
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_remove_door
+INT_VAR
+  door_index = "-1"
+  silent = 0
+STR_VAR
+  wed = ~wed~
+  door_name = ~~
+RET
+  success
+RET_ARRAY
+  ~%wed%~
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+  OUTER_SET num_doors = success ? $~%wed%~(~door~) : 0
+
+  ACTION_IF (success) BEGIN
+    LAF a7#__wed_get_door_index INT_VAR door_index silent STR_VAR wed door_name RET success door_index END
+  END
+
+  ACTION_IF (success) BEGIN
+    // moving subsequent door entries down by one index
+    OUTER_FOR (idx = door_index + 1; idx < num_doors; ++idx) BEGIN
+      OUTER_SET prev_idx = idx - 1
+      OUTER_SPRINT buffer $~%wed%~(~door~ ~%idx%~)
+      OUTER_SPRINT $~%wed%~(~door~ ~%prev_idx%~) ~%buffer%~
+
+      // moving tile indices
+      OUTER_SET num_tiles = $~%wed%~(~door~ ~%idx%~ ~lookup~)
+      OUTER_FOR (idx2 = 0; idx2 < num_tiles; ++idx2) BEGIN
+        OUTER_SET $~%wed%~(~door~ ~%prev_idx%~ ~lookup~ ~%idx2%~) = $~%wed%~(~door~ ~%idx%~ ~lookup~ ~%idx2%~)
+      END
+      OUTER_SET $~%wed%~(~door~ ~%prev_idx%~ ~lookup~) = num_tiles
+
+      // moving polygons
+      ACTION_DEFINE_ARRAY doorpoly_name BEGIN ~poly_open~ ~poly_closed~ END
+      OUTER_FOR (i = 0; i < 2; ++i) BEGIN
+        OUTER_SPRINT poly_name $doorpoly_name(~%i%~)
+        OUTER_SET num_polys = $~%wed%~(~door~ ~%idx%~ ~%poly_name%~)
+        OUTER_FOR (idx2 = 0; idx2 < num_polys; ++idx2) BEGIN
+          OUTER_SPRINT buffer $~%wed%~(~door~ ~%idx%~ ~%poly_name%~ ~%idx2%~)
+          OUTER_SPRINT $~%wed%~(~door~ ~%prev_idx%~ ~%poly_name%~ ~%idx2%~) ~%buffer%~
+
+          // moving vertex list
+          OUTER_SET num_vertices = $~%wed%~(~door~ ~%idx%~ ~%poly_name%~ ~%idx2%~ ~vertex~)
+          OUTER_FOR (idx3 = 0; idx3 < num_vertices; ++idx3) BEGIN
+            OUTER_SET $~%wed%~(~door~ ~%prev_idx%~ ~%poly_name%~ ~%idx2%~ ~vertex~ ~%idx3%~) = $~%wed%~(~door~ ~%idx%~ ~%poly_name%~ ~%idx2%~ ~vertex~ ~%idx3%~)
+          END
+          OUTER_SET $~%wed%~(~door~ ~%prev_idx%~ ~%poly_name%~ ~%idx2%~ ~vertex~) = num_vertices
+        END
+        OUTER_SET $~%wed%~(~door~ ~%prev_idx%~ ~%poly_name%~) = num_polys
+      END
+    END
+
+    OUTER_SET $~%wed%~(~door~) -= 1
+  END
+END
+
+/**
+ * Action and patch function that assigns new tilemap definitions to an existing door structure on the WED handle.
+ * Existing tilemap definitions are overwritten.
+ *
+ * INT_VAR door_index     Index of the door structure where the tilemap definition should be added.
+ *                        Omit if you specify the door structure by name.
+ * INT_VAR num_tilemaps   Number of tilemap entries to set or update. (Default: 0)
+ *                        Specifying 0 removes all tilemap entries.
+ * INT_VAR tilemap_0, ... Array "tilemap" with "num_tilemaps" tilemap indices.
+ *                        The following optional field is supported:
+ *                        - "tilemap_x_swap" indicates whether primary and secondary tile indices should
+ *                          swap places. It allows to reverse the open/closed states of door tiles. (Default: 0)
+ *                        Alternate notation: $tilemap("0"), $tilemap("0" "swap"), ...
+ *                        Skip entries or assign the constant "A7_WED_NO_CHANGE" to keep the original tilemap value.
+ *                        Skipping definitions or using the constant for non-existing tilemap definitions will trigger
+ *                        an error.
+ * INT_VAR tile_0, ...    Array "tile" with secondary tile indices, one for each specified tilemap definition,
+ *                        that applied to the overlay tilemap structures.
+ *                        Alternate notation: $tile("0"), ...
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * STR_VAR door_name      Name of the door structure where the tilemap definition should be added.
+ *                        Omit if you specify the door structure by index.
+ * RET success            Returns 1 if the operation was successful, 0 otherwise.
+ * RET_ARRAY %wed%        Returns the updated WED handle. Specify the actual name of the WED handle that is returned by "a7#wed_open"
+ *                        (which is "wed" by default).
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_set_door_tilemap
+INT_VAR
+  door_index = "-1"
+  num_tilemaps = 0
+  // tilemap_0 = 0
+  // tilemap_0_swap = 0
+  // ...
+  // tile_0 = 0
+  // ...
+  silent = 0
+STR_VAR
+  wed = ~wed~
+  door_name = ~~
+RET
+  success
+RET_ARRAY
+  ~%wed%~
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+
+  ACTION_IF (success) BEGIN
+    LAF a7#__wed_get_door_index INT_VAR door_index silent STR_VAR wed door_name RET success door_index END
+  END
+
+  ACTION_IF (success) BEGIN
+    // validating tilemap arrays
+    OUTER_SET num_tilemaps_old = $~%wed%~(~door~ ~%door_index%~ ~lookup~)
+    OUTER_FOR (idx = 0; idx < num_tilemaps; ++idx) BEGIN
+      OUTER_SET value = VARIABLE_IS_SET $tilemap(~%idx%~) ? $tilemap(~%idx%~) : A7_WED_NO_CHANGE
+      ACTION_IF (idx >= num_tilemaps_old && value == A7_WED_NO_CHANGE) BEGIN
+        OUTER_SET success = 0
+        ACTION_IF (NOT silent) BEGIN
+          WARN ~WARNING: Not enough tilemap entries defined (expected: %num_tilemaps%, found: %idx%)~
+        END
+        OUTER_SET idx = num_tilemaps
+      END ELSE ACTION_IF (value == A7_WED_NO_CHANGE) BEGIN
+        // resolving placeholder constant
+        OUTER_SET value = $~%wed%~(~door~ ~%door_index%~ ~lookup~ ~%idx%~)
+        OUTER_SPRINT buffer $~%wed%~(~overlay~ ~0~ ~tm~ ~%value%~)
+        OUTER_PATCH ~%buffer%~ BEGIN READ_SSHORT 0x04 sec END
+        OUTER_SET $tilemap(~%idx%~) = value
+        OUTER_SET $tile(~%idx%~) = sec
+      END ELSE ACTION_IF (NOT VARIABLE_IS_SET $tile(~%idx%~)) BEGIN
+        // tile definition must exist for new tilemap definitions
+        OUTER_SET success = 0
+        ACTION_IF (NOT silent) BEGIN
+          WARN ~WARNING: Not enough tile index entries defined (expected: %num_tilemaps%, found: %idx%)~
+        END
+        OUTER_SET idx = num_tilemaps
+      END
+    END
+  END
+
+  OUTER_SET num_overlays = $~%wed%~(~overlay~)
+  ACTION_IF (success && num_overlays < 1) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: No overlay structures defined~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    OUTER_SET num_overlay_tilemaps = $~%wed%~(~overlay~ ~0~ ~tm~)
+
+    // clearing old secondary tile indices in overlay
+    OUTER_SET num_lookup = $~%wed%~(~door~ ~%door_index%~ ~lookup~)
+    OUTER_SET num_lookup = (num_tilemaps < num_lookup) ? num_tilemaps : num_lookup
+    OUTER_FOR (idx = 0; idx < num_lookup; ++idx) BEGIN
+      OUTER_SET tm_idx = $~%wed%~(~door~ ~%door_index%~ ~lookup~ ~%idx%~)
+      ACTION_IF (tm_idx >= 0 && tm_idx < num_overlay_tilemaps) BEGIN
+        OUTER_SPRINT buffer $~%wed%~(~overlay~ ~0~ ~tm~ ~%tm_idx%~)
+        OUTER_PATCH_SAVE buffer ~%buffer%~ BEGIN WRITE_SHORT 0x04 "-1" END
+        OUTER_SPRINT $~%wed%~(~overlay~ ~0~ ~tm~ ~%tm_idx%~) ~%buffer%~
+      END
+    END
+
+    // assigning new tile indices to door and overlay structures
+    OUTER_FOR (idx = 0; idx < num_tilemaps; ++idx) BEGIN
+      OUTER_SET tm_idx = $tilemap(~%idx%~)
+      ACTION_IF (tm_idx >= 0 && tm_idx < num_overlay_tilemaps) BEGIN
+        OUTER_SET tile_idx = $tile(~%idx%~)
+        OUTER_SET swap = IS_AN_INT $tilemap(~%idx%~ ~swap~) ? $tilemap(~%idx%~ ~swap~) != 0 : 0
+
+        ACTION_IF (swap) BEGIN
+          // performing primary/secondary tile swap
+          OUTER_SET count = $~%wed%~(~overlay~ ~0~ ~tm~ ~%tm_idx%~ ~lookup~)
+          ACTION_IF (count > 0) BEGIN
+            OUTER_SET tile_pri = $~%wed%~(~overlay~ ~0~ ~tm~ ~%tm_idx%~ ~lookup~ ~0~)
+            OUTER_SET $~%wed%~(~overlay~ ~0~ ~tm~ ~%tm_idx%~ ~lookup~ ~0~) = tile_idx
+            OUTER_SET tile_idx = tile_pri
+          END
+        END
+
+        // updating secondary tile index in overlay tilemap
+        OUTER_SPRINT buffer $~%wed%~(~overlay~ ~0~ ~tm~ ~%tm_idx%~)
+        OUTER_PATCH_SAVE buffer ~%buffer%~ BEGIN WRITE_SHORT 0x04 tile_idx END
+        OUTER_SPRINT $~%wed%~(~overlay~ ~0~ ~tm~ ~%tm_idx%~) ~%buffer%~
+
+        // adding tile index to door structure
+        OUTER_SET $~%wed%~(~door~ ~%door_index%~ ~lookup~ ~%idx%~) = tm_idx
+      END
+    END
+    OUTER_SET $~%wed%~(~door~ ~%door_index%~ ~lookup~) = num_tilemaps
+  END
+END
+
+/**
+ * Action and patch function that adds a new (open or closed) polygon to an existing door structure on the WED handle.
+ *
+ * INT_VAR door_index     Index of the door structure where the polygon should be added. Omit if you specify
+ *                        the door structure by name.
+ * INT_VAR closed         Specify 0 to define a new open polygon, specify 1 to define a new closed polygon.
+ * INT_VAR flags          Polygon flags. (Default: 0)
+ * INT_VAR height         Polygon height. (Default: -1)
+ * INT_VAR num_vertices   Number of vertices to add. (Default: 0)
+ * INT_VAR vertex_0, ...  Array "vertex" with "num_vertices" vertex coordinates,
+ *                        as "X coordinate | (Y coordinate << 16)".
+ *                        Alternate notation: $vertex("0"), ...
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * STR_VAR door_name      Name of the door structure where the polygon should be added. Omit if you specify
+ *                        the door structure by index.
+ * RET success            Returns 1 if the operation was successful, 0 otherwise.
+ * RET index              Returns the index of the added (open or closed) door polygon if successful, -1 otherwise.
+ * RET_ARRAY %wed%        Returns the updated WED handle. Specify the actual name of the WED handle that is returned by "a7#wed_open"
+ *                        (which is "wed" by default).
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_add_door_poly
+INT_VAR
+  door_index = "-1"
+  closed = "-1"
+  flags = 0
+  height = "-1"
+  num_vertices = 0
+  // vertex_0 = x | (y << 16)
+  // ...
+  silent = 0
+STR_VAR
+  wed = ~wed~
+  door_name = ~~
+RET
+  success
+  index
+RET_ARRAY
+  ~%wed%~
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+  OUTER_SET index = "-1"
+
+  ACTION_IF (success) BEGIN
+    LAF a7#__wed_get_door_index INT_VAR door_index silent STR_VAR wed door_name RET success door_index END
+  END
+
+  ACTION_IF (success && closed == "-1") BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Polygon type (open / closed) was not specified~
+    END
+  END
+
+  ACTION_IF (success && num_vertices < 0) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Negative number of vertices not allowed: %num_vertices%~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    // validating vertex array
+    LAF a7#__wed_validate_array INT_VAR count = num_vertices STR_VAR name = ~vertex~ RET result END
+    ACTION_IF (result < num_vertices) BEGIN
+      OUTER_SET success = 0
+      ACTION_IF (NOT silent) BEGIN
+        WARN ~WARNING: Not enough vertex entries defined (expected: %num_vertices%, found: %result%)~
+      END
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    // setting up polygon
+    ACTION_DEFINE_ARRAY doorpoly_name BEGIN ~poly_open~ ~poly_closed~ END
+    OUTER_SET type = (closed != 0)
+    OUTER_SPRINT poly_name $doorpoly_name(~%type%~)
+    OUTER_SET index = $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~)
+    OUTER_PATCH_SAVE buffer ~~ BEGIN
+      INSERT_BYTES 0 18
+      WRITE_LONG 0x04 num_vertices
+      WRITE_BYTE 0x08 flags
+      WRITE_BYTE 0x09 height
+      LPF a7#__wed_calculate_poly_bounding_box INT_VAR count = num_vertices STR_VAR array = ~vertex~ RET min_x max_x min_y max_y END
+      WRITE_SHORT 0x0a min_x
+      WRITE_SHORT 0x0c max_x
+      WRITE_SHORT 0x0e min_y
+      WRITE_SHORT 0x10 max_y
+    END
+    OUTER_SPRINT $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%index%~) ~%buffer%~
+
+    // setting up vertices
+    OUTER_SET prev_value = 0
+    OUTER_FOR (idx = 0; idx < num_vertices; ++idx) BEGIN
+      OUTER_SET value = IS_AN_INT $vertex(~%idx%~) ? $vertex(~%idx%~) : prev_value
+      OUTER_SET $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%index%~ ~vertex~ ~%idx%~) = value
+      OUTER_SET prev_value = value
+    END
+    OUTER_SET $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%index%~ ~vertex~) = num_vertices
+
+    OUTER_SET $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~) += 1
+  END
+END
+
+/**
+ * Action and patch function that alters base attributes of an existing (open or closed) door polygon on the WED handle.
+ *
+ * INT_VAR door_index     Index of the door structure with the polygon to patch. Omit if you specify the
+ *                        door structure by name.
+ * INT_VAR closed         Specify 0 to patch an open polygon, specify 1 to define a closed polygon.
+ * INT_VAR polygon_index  Index of the (open or closed) door polygon to patch.
+ * INT_VAR flags          New polygon flags. (Default: no change)
+ * INT_VAR height         New polygon height. (Default: no change)
+ * INT_VAR num_vertices   New number of vertices. If this parameter is specified then the current polygon
+ *                        vertices are updated with the specified vertex definitions. (Default: no change)
+ * INT_VAR vertex_0, ...  Array "vertex" with "num_vertices" vertex coordinates,
+ *                        as "X coordinate | (Y coordinate << 16)".
+ *                        Alternate notation: $vertex("0"), ...
+ *                        Skip entries or assign the constant "A7_WED_NO_CHANGE" to keep the original vertex value.
+ *                        Skipping definitions or using the constant for non-existing vertices will trigger an error.
+ *                        This array is only considered if "num_vertices" is defined.
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * STR_VAR door_name      Name of the door structure with the polygon to patch. Omit if you specify the door
+ *                        structure by index.
+ * RET success            Returns 1 if the operation was successful, 0 otherwise.
+ * RET_ARRAY %wed%        Returns the updated WED handle. Specify the actual name of the WED handle that is returned by "a7#wed_open"
+ *                        (which is "wed" by default).
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_alter_door_poly
+INT_VAR
+  door_index = "-1"
+  closed = "-1"
+  polygon_index = "-1"
+  flags = 0x100
+  height = 0x100
+  num_vertices = "-1"
+  // vertex_0 = x | (y << 16)
+  // ...
+  silent = 0
+STR_VAR
+  wed = ~wed~
+  door_name = ~~
+RET
+  success
+RET_ARRAY
+  ~%wed%~
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+
+  ACTION_IF (success) BEGIN
+    LAF a7#__wed_get_door_index INT_VAR door_index silent STR_VAR wed door_name RET success door_index END
+  END
+
+  ACTION_IF (success && closed == "-1") BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Polygon type (open / closed) was not specified~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    ACTION_DEFINE_ARRAY doorpoly_name BEGIN ~poly_open~ ~poly_closed~ END
+    OUTER_SET type = (closed != 0)
+    OUTER_SPRINT poly_name $doorpoly_name(~%type%~)
+    OUTER_SET num_polys = success ? $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~) : 0
+  END
+
+  ACTION_IF (success && (polygon_index < 0 || polygon_index >= num_polys)) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Polygon index is out of bounds: %polygon_index%~
+    END
+  END
+
+  ACTION_IF (success && num_vertices >= 0) BEGIN
+    // validating vertex array
+    OUTER_SET num_vertices_old = $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%polygon_index%~ ~vertex~)
+    OUTER_FOR (idx = 0; idx < num_vertices; ++idx) BEGIN
+      OUTER_SET value = VARIABLE_IS_SET $vertex(~%idx%~) ? $vertex(~%idx%~) : A7_WED_NO_CHANGE
+      ACTION_IF (idx >= num_vertices_old && value == A7_WED_NO_CHANGE) BEGIN
+        OUTER_SET success = 0
+        ACTION_IF (NOT silent) BEGIN
+          WARN ~WARNING: Not enough vertex entries defined (expected: %num_vertices%, found: %idx%)~
+        END
+        OUTER_SET idx = num_vertices
+      END ELSE ACTION_IF (value == A7_WED_NO_CHANGE) BEGIN
+        // resolving placeholder constant
+        OUTER_SET $vertex(~%idx%~) = $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%polygon_index%~ ~vertex~ ~%idx%~)
+      END
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    // patching polygon
+    OUTER_SPRINT buffer $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%polygon_index%~)
+    OUTER_PATCH_SAVE buffer ~%buffer%~ BEGIN
+      PATCH_IF (flags != 0x100) BEGIN
+        WRITE_BYTE 0x08 flags
+      END
+      PATCH_IF (height != 0x100) BEGIN
+        WRITE_BYTE 0x09 height
+      END
+      PATCH_IF (num_vertices >= 0) BEGIN
+        WRITE_LONG 0x04 num_vertices
+        LPF a7#__wed_calculate_poly_bounding_box INT_VAR count = num_vertices STR_VAR array = ~vertex~ RET min_x max_x min_y max_y END
+        WRITE_SHORT 0x0a min_x
+        WRITE_SHORT 0x0c max_x
+        WRITE_SHORT 0x0e min_y
+        WRITE_SHORT 0x10 max_y
+      END
+    END
+    OUTER_SPRINT $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%polygon_index%~) ~%buffer%~
+
+    ACTION_IF (num_vertices >= 0) BEGIN
+      // patching vertices
+      OUTER_SET prev_value = 0
+      OUTER_FOR (idx = 0; idx < num_vertices; ++idx) BEGIN
+        OUTER_SET value = IS_AN_INT $vertex(~%idx%~) ? $vertex(~%idx%~) : prev_value
+        OUTER_SET $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%polygon_index%~ ~vertex~ ~%idx%~) = value
+        OUTER_SET prev_value = value
+      END
+      OUTER_SET $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%polygon_index%~ ~vertex~) = num_vertices
+    END
+  END
+END
+
+/**
+ * Action and patch function that removes a (open or closed) polygon from a door structure on the WED handle.
+ *
+ * INT_VAR closed         Specify 0 to remove an open polygon, specify 1 to remove a closed polygon.
+ * INT_VAR polygon_index  Index of the polygon structure to remove.
+ * INT_VAR door_index     Index of the door structure with the polygon to remove. Omit if you specify the door
+ *                        structure by name.
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * STR_VAR door_name      Name of the door structure with the polygon to remove. Omit if you specify the door
+ *                        structure by index.
+ * RET success            Returns 1 if the operation was successful, 0 otherwise.
+ * RET_ARRAY %wed%        Returns the updated WED handle. Specify the actual name of the WED handle that is returned by "a7#wed_open"
+ *                        (which is "wed" by default).
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_remove_door_poly
+INT_VAR
+  closed = "-1"
+  polygon_index = "-1"
+  door_index = "-1"
+  silent = 0
+STR_VAR
+  wed = ~wed~
+  door_name = ~~
+RET
+  success
+RET_ARRAY
+  ~%wed%~
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+
+  ACTION_IF (success) BEGIN
+    LAF a7#__wed_get_door_index INT_VAR door_index silent STR_VAR wed door_name RET success door_index END
+  END
+
+  ACTION_IF (success && closed == "-1") BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Polygon type (open / closed) was not specified~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    ACTION_DEFINE_ARRAY doorpoly_name BEGIN ~poly_open~ ~poly_closed~ END
+    OUTER_SET type = (closed != 0)
+    OUTER_SPRINT poly_name $doorpoly_name(~%type%~)
+    OUTER_SET num_polys = success ? $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~) : 0
+  END
+
+  ACTION_IF (success && (polygon_index < 0 || polygon_index >= num_polys)) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Polygon index is out of bounds: %polygon_index%~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    // moving subsequent polygon entries down by one index
+    OUTER_FOR (idx = polygon_index + 1; idx < num_polys; ++idx) BEGIN
+      OUTER_SET prev_idx = idx - 1
+      OUTER_SPRINT buffer $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%idx%~)
+      OUTER_SPRINT $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%prev_idx%~) ~%buffer%~
+
+      // moving vertex list
+      OUTER_SET num_vertices = $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%idx%~ ~vertex~)
+      OUTER_FOR (idx2 = 0; idx2 < num_vertices; ++idx2) BEGIN
+        OUTER_SET $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%prev_idx%~ ~vertex~ ~%idx2%~) = $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%idx%~ ~vertex~ ~%idx2%~)
+      END
+      OUTER_SET $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%prev_idx%~ ~vertex~) = num_vertices
+    END
+
+    OUTER_SET $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~) -= 1
+  END
+END
+
+/**
+ * Action and patch function that moves a wall polygon on the WED handle by a specified amount in either direction.
+ *
+ * INT_VAR polygon_index  Index of the wall polygon to move.
+ * INT_VAR x              Amount to move in horizontal direction. Specify positive values to move to the right and negative values to move to the left.
+ * INT_VAR y              Amount to move in vertical direction. Specify positive values to move downwards and negative values to move upwards.
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * RET success            Returns 1 if the operation was successful, 0 otherwise.
+ * RET_ARRAY %wed%        Returns the updated WED handle. Specify the actual name of the WED handle that is returned by "a7#wed_open"
+ *                        (which is "wed" by default).
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_wall_poly_move
+INT_VAR
+  polygon_index = "-1"
+  x = 0
+  y = 0
+  silent = 0
+STR_VAR
+  wed = ~wed~
+RET
+  success
+RET_ARRAY
+  ~%wed%~
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+  OUTER_SET num_wallpolys = success ? $~%wed%~(~wallpoly~) : 0
+
+  ACTION_IF (success && (polygon_index < 0 || polygon_index >= num_wallpolys)) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Polygon index is out of bounds: %polygon_index%~
+    END
+  END
+
+  ACTION_IF (success && (x != 0 || y != 0)) BEGIN
+    // patching bounding box
+    OUTER_SPRINT buffer $~%wed%~(~wallpoly~ ~%polygon_index%~)
+    OUTER_PATCH_SAVE buffer ~%buffer%~ BEGIN
+      WRITE_SHORT 0x0a (THIS + x)
+      WRITE_SHORT 0x0c (THIS + x)
+      WRITE_SHORT 0x0e (THIS + y)
+      WRITE_SHORT 0x10 (THIS + y)
+    END
+    OUTER_SPRINT $~%wed%~(~wallpoly~ ~%polygon_index%~) ~%buffer%~
+
+    // patching vertices
+    OUTER_SET num_vertices = $~%wed%~(~wallpoly~ ~%polygon_index%~ ~vertex~)
+    OUTER_FOR (idx = 0; idx < num_vertices; ++idx) BEGIN
+      OUTER_SET value = $~%wed%~(~wallpoly~ ~%polygon_index%~ ~vertex~ ~%idx%~)
+      OUTER_SET vx = (value BLSL 16) BASR 16
+      OUTER_SET vx += x
+      OUTER_SET vy = value BASR 16
+      OUTER_SET vy += y
+      OUTER_SET $~%wed%~(~wallpoly~ ~%polygon_index%~ ~vertex~ ~%idx%~) = (vx & 0xffff) | (vy << 16)
+    END
+  END
+END
+
+/**
+ * Action and patch function that moves a door polygon on the WED handle by a specified amount in either direction.
+ *
+ * INT_VAR closed         Specify 0 to move an open polygon, specify 1 to move a closed polygon.
+ * INT_VAR door_index     Index of the door structure with the polygon to move. Omit if you specify the door
+ *                        structure by name.
+ * INT_VAR polygon_index  Index of the door polygon to move.
+ * INT_VAR x              Amount to move in horizontal direction. Specify positive values to move to the right and negative values to move to the left.
+ * INT_VAR y              Amount to move in vertical direction. Specify positive values to move downwards and negative values to move upwards.
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * STR_VAR door_name      Name of the door structure with the polygon to move. Omit if you specify the door
+ *                        structure by index.
+ * RET success            Returns 1 if the operation was successful, 0 otherwise.
+ * RET_ARRAY %wed%        Returns the updated WED handle. Specify the actual name of the WED handle that is returned by "a7#wed_open"
+ *                        (which is "wed" by default).
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_door_poly_move
+INT_VAR
+  closed = "-1"
+  polygon_index = "-1"
+  door_index = "-1"
+  x = 0
+  y = 0
+  silent = 0
+STR_VAR
+  wed = ~wed~
+  door_name = ~~
+RET
+  success
+RET_ARRAY
+  ~%wed%~
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+
+  ACTION_IF (success) BEGIN
+    LAF a7#__wed_get_door_index INT_VAR door_index silent STR_VAR wed door_name RET success door_index END
+  END
+
+  ACTION_IF (success && closed == "-1") BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Polygon type (open / closed) was not specified~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    ACTION_DEFINE_ARRAY doorpoly_name BEGIN ~poly_open~ ~poly_closed~ END
+    OUTER_SET type = (closed != 0)
+    OUTER_SPRINT poly_name $doorpoly_name(~%type%~)
+    OUTER_SET num_polys = success ? $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~) : 0
+  END
+
+  ACTION_IF (success && (polygon_index < 0 || polygon_index >= num_polys)) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Polygon index is out of bounds: %polygon_index%~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    // patching bounding box
+    OUTER_SPRINT buffer $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%polygon_index%~)
+    OUTER_PATCH_SAVE buffer ~%buffer%~ BEGIN
+      WRITE_SHORT 0x0a (THIS + x)
+      WRITE_SHORT 0x0c (THIS + x)
+      WRITE_SHORT 0x0e (THIS + y)
+      WRITE_SHORT 0x10 (THIS + y)
+    END
+    OUTER_SPRINT $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%polygon_index%~) ~%buffer%~
+
+    // patching vertices
+    OUTER_SET num_vertices = $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%polygon_index%~ ~vertex~)
+    OUTER_FOR (idx = 0; idx < num_vertices; ++idx) BEGIN
+      OUTER_SET value = $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%polygon_index%~ ~vertex~ ~%idx%~)
+      OUTER_SET vx = (value BLSL 16) BASR 16
+      OUTER_SET vx += x
+      OUTER_SET vy = value BASR 16
+      OUTER_SET vy += y
+      OUTER_SET $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%polygon_index%~ ~vertex~ ~%idx%~) = (vx & 0xffff) | (vy << 16)
+    END
+  END
+END
+
+/**
+ * Action and patch function that scales a wall polygon on the WED handle by a specified factor in either direction.
+ *
+ * INT_VAR polygon_index  Index of the wall polygon to scale.
+ * INT_VAR scale_x        Indicates whether to scale horizontally. (Default: 1)
+ * INT_VAR scale_y        Indicates whether to scale vertically. (Default: 1)
+ * INT_VAR numerator      Numerator (top value of a fraction) of the scaling factor. (Default: 1)
+ *                        Note: A negative fractional value will mirror the polygon vertex coordinates around the anchor point.
+ * INT_VAR denominator    Denominator (bottom value of a fraction) of the scaling factor. Must not be 0. (Default: 1)
+ *                        Note: A negative fractional value will mirror the polygon vertex coordinates around the anchor point.
+ * INT_VAR x              If "custom" anchor is specified then this value defines the absolute x coordinate of the anchor point. (Default: 0)
+ * INT_VAR y              If "custom" anchor is specified then this value defines the absolute y coordinate of the anchor point. (Default: 0)
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * STR_VAR anchor         Anchor point for the scaling operation. Relative movement of the vertices is centered on this position. (Default: "origin")
+ *                        Supported anchor points:
+ *                        - origin:                 Uses absolute coordinates (0,0) as anchor point
+ *                        - custom:                 Uses parameters x and y as anchor point coordinates
+ *                        - relative_top_left:      Uses top-left bounding box coordinates as anchor point
+ *                        - relative_top_center:    Uses top-horizontal center bounding box coordinates as anchor point
+ *                        - relative_top_right:     Uses top-right bounding box coordinates as anchor point
+ *                        - relative_center_left:   Uses vertical center-left bounding box coordinates as anchor point
+ *                        - relative_center_right:  Uses vertical center-right bounding box coordinates as anchor point
+ *                        - relative_bottom_left:   Uses bottom-left bounding box coordinates as anchor point
+ *                        - relative_bottom_center: Uses bottom-horizontal center bounding box coordinates as anchor point
+ *                        - relative_bottom_right:  Uses bottom-right bounding box coordinates as anchor point
+ *                        - relative_center:        Uses the (horizontal and vertical) center of the bounding box coordinates as anchor point
+ * RET success            Returns 1 if the operation was successful, 0 otherwise.
+ * RET_ARRAY %wed%        Returns the updated WED handle. Specify the actual name of the WED handle that is returned by "a7#wed_open"
+ *                        (which is "wed" by default).
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_wall_poly_scale
+INT_VAR
+  polygon_index = "-1"
+  scale_x = 1
+  scale_y = 1
+  numerator = 1
+  denominator = 1
+  x = 0
+  y = 0
+  silent = 0
+STR_VAR
+  wed = ~wed~
+  anchor = ~origin~
+RET
+  success
+RET_ARRAY
+  ~%wed%~
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+  OUTER_SET num_wallpolys = success ? $~%wed%~(~wallpoly~) : 0
+
+  ACTION_IF (success && (polygon_index < 0 || polygon_index >= num_wallpolys)) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Polygon index is out of bounds: %polygon_index%~
+    END
+  END
+
+  ACTION_IF (success && denominator == 0) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Denominator of the scaling factor cannot be 0~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    OUTER_SPRINT buffer $~%wed%~(~wallpoly~ ~%polygon_index%~)
+    OUTER_PATCH ~%buffer%~ BEGIN
+      READ_SSHORT 0x0a min_x
+      READ_SSHORT 0x0c max_x
+      READ_SSHORT 0x0e min_y
+      READ_SSHORT 0x10 max_y
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    ACTION_MATCH ~%anchor%~ WITH
+      ~origin~ BEGIN
+        OUTER_SET x = 0
+        OUTER_SET y = 0
+      END
+      ~custom~ BEGIN
+        // use x and y as specified
+      END
+      ~relative_top_left~ BEGIN
+        OUTER_SET x = min_x
+        OUTER_SET y = min_y
+      END
+      ~relative_top_center~ BEGIN
+        OUTER_SET x = (min_x + max_x) / 2
+        OUTER_SET y = min_y
+      END
+      ~relative_top_right~ BEGIN
+        OUTER_SET x = max_x
+        OUTER_SET y = min_y
+      END
+      ~relative_center_left~ BEGIN
+        OUTER_SET x = min_x
+        OUTER_SET y = (min_y + max_y) / 2
+      END
+      ~relative_center_right~ BEGIN
+        OUTER_SET x = max_x
+        OUTER_SET y = (min_y + max_y) / 2
+      END
+      ~relative_bottom_left~ BEGIN
+        OUTER_SET x = min_x
+        OUTER_SET y = max_y
+      END
+      ~relative_bottom_center~ BEGIN
+        OUTER_SET x = (min_x + max_x) / 2
+        OUTER_SET y = max_y
+      END
+      ~relative_bottom_right~ BEGIN
+        OUTER_SET x = max_x
+        OUTER_SET y = max_y
+      END
+      ~relative_center~ BEGIN
+        OUTER_SET x = (min_x + max_x) / 2
+        OUTER_SET y = (min_y + max_y) / 2
+      END
+      DEFAULT
+        OUTER_SET success = 0
+        ACTION_IF (NOT silent) BEGIN
+          WARN ~WARNING: Unsupported anchor type: %anchor%~
+        END
+    END
+  END
+
+  ACTION_IF (success && numerator != denominator) BEGIN
+    // patching bounding box
+    OUTER_SPRINT buffer $~%wed%~(~wallpoly~ ~%polygon_index%~)
+    OUTER_PATCH_SAVE buffer ~%buffer%~ BEGIN
+      PATCH_IF (scale_x) BEGIN
+        READ_SSHORT 0x0a vx
+        SET vx = ((vx - x) * numerator / denominator) + x
+        SET vx = (vx < 0) ? "-1" : vx
+        WRITE_SHORT 0x0a vx
+        READ_SSHORT 0x0c vx
+        SET vx = ((vx - x) * numerator / denominator) + x
+        SET vx = (vx < 0) ? 0 : vx
+        WRITE_SHORT 0x0c vx
+      END
+      PATCH_IF (scale_y) BEGIN
+        READ_SSHORT 0x0e vy
+        SET vy = ((vy - x) * numerator / denominator) + y
+        SET vy = (vy < 0) ? "-1" : vy
+        WRITE_SHORT 0x0e vy
+        READ_SSHORT 0x10 vy
+        SET vy = ((vy - x) * numerator / denominator) + y
+        SET vy = (vy < 0) ? 0 : vy
+        WRITE_SHORT 0x10 vy
+      END
+    END
+    OUTER_SPRINT $~%wed%~(~wallpoly~ ~%polygon_index%~) ~%buffer%~
+
+    // patching vertices
+    OUTER_SET num_vertices = $~%wed%~(~wallpoly~ ~%polygon_index%~ ~vertex~)
+    OUTER_FOR (idx = 0; idx < num_vertices; ++idx) BEGIN
+      OUTER_SET value = $~%wed%~(~wallpoly~ ~%polygon_index%~ ~vertex~ ~%idx%~)
+      OUTER_SET vx = (value BLSL 16) BASR 16
+      ACTION_IF (scale_x) BEGIN
+        OUTER_SET vx = ((vx - x) * numerator / denominator) + x
+      END
+      OUTER_SET vy = value BASR 16
+      ACTION_IF (scale_y) BEGIN
+        OUTER_SET vy = ((vy - y) * numerator / denominator) + y
+      END
+      OUTER_SET $~%wed%~(~wallpoly~ ~%polygon_index%~ ~vertex~ ~%idx%~) = (vx & 0xffff) | (vy << 16)
+    END
+  END
+END
+
+/**
+ * Action and patch function that scales a door polygon on the WED handle by a specified factor in either direction.
+ *
+ * INT_VAR closed         Specify 0 to scale an open polygon, specify 1 to scale a closed polygon.
+ * INT_VAR door_index     Index of the door structure with the polygon to scale. Omit if you specify the door
+ *                        structure by name.
+ * INT_VAR polygon_index  Index of the door polygon to scale.
+ * INT_VAR scale_x        Indicates whether to scale horizontally. (Default: 1)
+ * INT_VAR scale_y        Indicates whether to scale vertically. (Default: 1)
+ * INT_VAR numerator      Numerator (top value of a fraction) of the scaling factor. (Default: 1)
+ *                        Note: A negative fractional value will mirror the polygon vertex coordinates around the anchor point.
+ * INT_VAR denominator    Denominator (bottom value of a fraction) of the scaling factor. Must not be 0. (Default: 1)
+ *                        Note: A negative fractional value will mirror the polygon vertex coordinates around the anchor point.
+ * INT_VAR x              If "custom" anchor is specified then this value defines the absolute x coordinate of the anchor point. (Default: 0)
+ * INT_VAR y              If "custom" anchor is specified then this value defines the absolute y coordinate of the anchor point. (Default: 0)
+ * INT_VAR silent         Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * STR_VAR door_name      Name of the door structure with the polygon to scale. Omit if you specify the door
+ *                        structure by index.
+ * STR_VAR anchor         Anchor point for the scaling operation. Relative movement of the vertices is centered on this position. (Default: "origin")
+ *                        Supported anchor points:
+ *                        - origin:                 Uses absolute coordinates (0,0) as anchor point
+ *                        - custom:                 Uses parameters x and y as anchor point coordinates
+ *                        - relative_top_left:      Uses top-left bounding box coordinates as anchor point
+ *                        - relative_top_center:    Uses top-horizontal center bounding box coordinates as anchor point
+ *                        - relative_top_right:     Uses top-right bounding box coordinates as anchor point
+ *                        - relative_center_left:   Uses vertical center-left bounding box coordinates as anchor point
+ *                        - relative_center_right:  Uses vertical center-right bounding box coordinates as anchor point
+ *                        - relative_bottom_left:   Uses bottom-left bounding box coordinates as anchor point
+ *                        - relative_bottom_center: Uses bottom-horizontal center bounding box coordinates as anchor point
+ *                        - relative_bottom_right:  Uses bottom-right bounding box coordinates as anchor point
+ *                        - relative_center:        Uses the (horizontal and vertical) center of the bounding box coordinates as anchor point
+ * RET success            Returns 1 if the operation was successful, 0 otherwise.
+ * RET_ARRAY %wed%        Returns the updated WED handle. Specify the actual name of the WED handle that is returned by "a7#wed_open"
+ *                        (which is "wed" by default).
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_door_poly_scale
+INT_VAR
+  closed = "-1"
+  polygon_index = "-1"
+  door_index = "-1"
+  scale_x = 1
+  scale_y = 1
+  numerator = 1
+  denominator = 1
+  x = 0
+  y = 0
+  silent = 0
+STR_VAR
+  wed = ~wed~
+  door_name = ~~
+  anchor = ~origin~
+RET
+  success
+RET_ARRAY
+  ~%wed%~
+BEGIN
+  LAF a7#__wed_validate STR_VAR wed RET success END
+
+  ACTION_IF (success) BEGIN
+    LAF a7#__wed_get_door_index INT_VAR door_index silent STR_VAR wed door_name RET success door_index END
+  END
+
+  ACTION_IF (success && closed == "-1") BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Polygon type (open / closed) was not specified~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    ACTION_DEFINE_ARRAY doorpoly_name BEGIN ~poly_open~ ~poly_closed~ END
+    OUTER_SET type = (closed != 0)
+    OUTER_SPRINT poly_name $doorpoly_name(~%type%~)
+    OUTER_SET num_polys = success ? $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~) : 0
+  END
+
+  ACTION_IF (success && (polygon_index < 0 || polygon_index >= num_polys)) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Polygon index is out of bounds: %polygon_index%~
+    END
+  END
+
+  ACTION_IF (success && denominator == 0) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Denominator of the scaling factor cannot be 0~
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    OUTER_SPRINT buffer $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%polygon_index%~)
+    OUTER_PATCH ~%buffer%~ BEGIN
+      READ_SSHORT 0x0a min_x
+      READ_SSHORT 0x0c max_x
+      READ_SSHORT 0x0e min_y
+      READ_SSHORT 0x10 max_y
+    END
+  END
+
+  ACTION_IF (success) BEGIN
+    ACTION_MATCH ~%anchor%~ WITH
+      ~origin~ BEGIN
+        OUTER_SET x = 0
+        OUTER_SET y = 0
+      END
+      ~custom~ BEGIN
+        // use x and y as specified
+      END
+      ~relative_top_left~ BEGIN
+        OUTER_SET x = min_x
+        OUTER_SET y = min_y
+      END
+      ~relative_top_center~ BEGIN
+        OUTER_SET x = (min_x + max_x) / 2
+        OUTER_SET y = min_y
+      END
+      ~relative_top_right~ BEGIN
+        OUTER_SET x = max_x
+        OUTER_SET y = min_y
+      END
+      ~relative_center_left~ BEGIN
+        OUTER_SET x = min_x
+        OUTER_SET y = (min_y + max_y) / 2
+      END
+      ~relative_center_right~ BEGIN
+        OUTER_SET x = max_x
+        OUTER_SET y = (min_y + max_y) / 2
+      END
+      ~relative_bottom_left~ BEGIN
+        OUTER_SET x = min_x
+        OUTER_SET y = max_y
+      END
+      ~relative_bottom_center~ BEGIN
+        OUTER_SET x = (min_x + max_x) / 2
+        OUTER_SET y = max_y
+      END
+      ~relative_bottom_right~ BEGIN
+        OUTER_SET x = max_x
+        OUTER_SET y = max_y
+      END
+      ~relative_center~ BEGIN
+        OUTER_SET x = (min_x + max_x) / 2
+        OUTER_SET y = (min_y + max_y) / 2
+      END
+      DEFAULT
+        OUTER_SET success = 0
+        ACTION_IF (NOT silent) BEGIN
+          WARN ~WARNING: Unsupported anchor type: %anchor%~
+        END
+    END
+  END
+
+  ACTION_IF (success && numerator != denominator) BEGIN
+    // patching bounding box
+    OUTER_SPRINT buffer $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%polygon_index%~)
+    OUTER_PATCH_SAVE buffer ~%buffer%~ BEGIN
+      PATCH_IF (scale_x) BEGIN
+        READ_SSHORT 0x0a vx
+        SET vx = ((vx - x) * numerator / denominator) + x
+        SET vx = (vx < 0) ? "-1" : vx
+        WRITE_SHORT 0x0a vx
+        READ_SSHORT 0x0c vx
+        SET vx = ((vx - x) * numerator / denominator) + x
+        SET vx = (vx < 0) ? 0 : vx
+        WRITE_SHORT 0x0c vx
+      END
+      PATCH_IF (scale_y) BEGIN
+        READ_SSHORT 0x0e vy
+        SET vy = ((vy - x) * numerator / denominator) + y
+        SET vy = (vy < 0) ? "-1" : vy
+        WRITE_SHORT 0x0e vy
+        READ_SSHORT 0x10 vy
+        SET vy = ((vy - x) * numerator / denominator) + y
+        SET vy = (vy < 0) ? 0 : vy
+        WRITE_SHORT 0x10 vy
+      END
+    END
+    OUTER_SPRINT $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%polygon_index%~) ~%buffer%~
+
+    // patching vertices
+    OUTER_SET num_vertices = $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%polygon_index%~ ~vertex~)
+    OUTER_FOR (idx = 0; idx < num_vertices; ++idx) BEGIN
+      OUTER_SET value = $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%polygon_index%~ ~vertex~ ~%idx%~)
+      OUTER_SET vx = (value BLSL 16) BASR 16
+      ACTION_IF (scale_x) BEGIN
+        OUTER_SET vx = ((vx - x) * numerator / denominator) + x
+      END
+      OUTER_SET vy = value BASR 16
+      ACTION_IF (scale_y) BEGIN
+        OUTER_SET vy = ((vy - y) * numerator / denominator) + y
+      END
+      OUTER_SET $~%wed%~(~door~ ~%door_index%~ ~%poly_name%~ ~%polygon_index%~ ~vertex~ ~%idx%~) = (vx & 0xffff) | (vy << 16)
+    END
+  END
+END
+
+/**
+ * Action and patch function that explicitly rebuilds the wallgroups section on the WED file.
+ *
+ * Note: Calling this function explicitly is not necessary since wallgroups are automatically rebuilt by a call of "a7#wed_close".
+ *
+ * STR_VAR wed            Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ *                        Can be omitted if the return value from "a7#wed_open" is used as is. (Default: "wed")
+ * RET_ARRAY %wed%        Returns the updated WED handle. Specify the actual name of the WED handle that is returned by "a7#wed_open"
+ *                        (which is "wed" by default).
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#batch_wed_rebuild_wallgroups
+STR_VAR
+  wed = ~wed~
+RET_ARRAY
+  ~%wed%~
+BEGIN
+  LAF a7#__wed_build_wallgroups STR_VAR wed RET_ARRAY ~%wed%~ END
+END
+
+
+/**
+ * Used internally: Validates the number of array elements.
+ *
+ * INT_VAR count  Min. number of expected array elements. Specify negative value to ignore expected result. (Default: -1)
+ * STR_VAR name   Name of the array.
+ * RET result     Determined number of array elements.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#__wed_validate_array
+INT_VAR
+  count = "-1"
+STR_VAR
+  name = ~~
+RET
+  result
+BEGIN
+  OUTER_FOR (result = 0; (count < 0 || result < count) && VARIABLE_IS_SET $~%name%~(~%result%~); ++result) BEGIN END
+END
+
+/**
+ * Used internally: Disassembles the current WED into the array structure "wed".
+ *
+ * RET success    Returns 1 on success and 0 on error.
+ * RET_ARRAY wed  Initialized WED array structure if success is 1.
+ */
+DEFINE_PATCH_FUNCTION a7#__wed_disassemble
+RET
+  success
+RET_ARRAY
+  wed
+BEGIN
+  SET success = 1
+  
+  SET $wed(~overlay~) = 0
+  SET $wed(~door~) = 0
+  SET $wed(~wallpoly~) = 0
+  SET $wed(~wallgroup~) = 0 // populated later dynamically
+
+  READ_ASCII 0 sig (8)
+  PATCH_IF (~%sig%~ STR_EQ ~WED V1.3~) BEGIN
+    READ_LONG 0x08 num_overlays
+    READ_LONG 0x0c num_doors
+    READ_LONG 0x10 ofs_overlays
+    READ_LONG 0x14 ofs_header2
+    READ_LONG 0x18 ofs_doors
+    READ_LONG 0x1c ofs_door_lookup
+    READ_LONG (ofs_header2 + 0x00) num_wallpolys
+    READ_LONG (ofs_header2 + 0x04) ofs_wallpolys
+    READ_LONG (ofs_header2 + 0x08) ofs_vertices
+    READ_LONG (ofs_header2 + 0x0c) ofs_wallgroups
+    READ_LONG (ofs_header2 + 0x10) ofs_wallpoly_lookup
+
+    // parsing overlays
+    SET $wed(~overlay~) = num_overlays
+    FOR (idx_ovl = 0; idx_ovl < num_overlays; ++idx_ovl) BEGIN
+      SET cur_ofs_ovl = ofs_overlays + (idx_ovl * 24)
+      READ_ASCII cur_ofs_ovl $wed(~overlay~ ~%idx_ovl%~) (24)
+
+      // parsing tilemaps
+      READ_SHORT (cur_ofs_ovl + 0x00) width
+      READ_SHORT (cur_ofs_ovl + 0x02) height
+      READ_LONG (cur_ofs_ovl + 0x10) ofs_tm
+      READ_LONG (cur_ofs_ovl + 0x14) ofs_tm_lookup
+      SET num_tilemaps = width * height
+      SET $wed(~overlay~ ~%idx_ovl%~ ~tm~) = num_tilemaps
+      FOR (idx_tm = 0; idx_tm < num_tilemaps; ++idx_tm) BEGIN
+        SET cur_ofs_tm = ofs_tm + (idx_tm * 10)
+        READ_ASCII cur_ofs_tm $wed(~overlay~ ~%idx_ovl%~ ~tm~ ~%idx_tm%~) (10)
+
+        // parsing tilemap index lookup
+        READ_SHORT (cur_ofs_tm + 0x00) idx_pri
+        READ_SHORT (cur_ofs_tm + 0x02) num_pri
+        SET $wed(~overlay~ ~%idx_ovl%~ ~tm~ ~%idx_tm%~ ~lookup~) = num_pri
+        FOR (idx_tmi = 0; idx_tmi < num_pri; ++idx_tmi) BEGIN
+          READ_SHORT (ofs_tm_lookup + (idx_pri + idx_tmi) * 2) tile_index
+          SET $wed(~overlay~ ~%idx_ovl%~ ~tm~ ~%idx_tm%~ ~lookup~ ~%idx_tmi%~) = tile_index
+        END
+      END
+    END
+
+    // parsing doors
+    SET $wed(~door~) = num_doors
+    FOR (idx_door = 0; idx_door < num_doors; ++idx_door) BEGIN
+      SET cur_ofs_door = ofs_doors + (idx_door * 26)
+      READ_ASCII cur_ofs_door $wed(~door~ ~%idx_door%~) (26)
+
+      // parsing tilemap indices
+      READ_SHORT (cur_ofs_door + 0x0a) idx_tm_lookup
+      READ_SHORT (cur_ofs_door + 0x0c) num_tm_lookup
+      SET $wed(~door~ ~%idx_door%~ ~lookup~) = num_tm_lookup
+      FOR (idx_tmi = 0; idx_tmi < num_tm_lookup; ++idx_tmi) BEGIN
+        READ_SHORT (ofs_door_lookup + (idx_tm_lookup + idx_tmi) * 2) tile_index
+        SET $wed(~door~ ~%idx_door%~ ~lookup~ ~%idx_tmi%~) = tile_index
+      END
+
+      // parsing door polygons
+      DEFINE_ARRAY doorpoly_name BEGIN ~poly_open~ ~poly_closed~ END
+      FOR (i = 0; i < 2; ++i) BEGIN // i specifies poly type (0: open, 1: closed)
+        SPRINT poly_name $doorpoly_name(~%i%~)
+        READ_SHORT (cur_ofs_door + 0x0e + i * 2) num_polys
+        READ_LONG (cur_ofs_door + 0x12 + i * 4) ofs_polys
+        SET $wed(~door~ ~%idx_door%~ ~%poly_name%~) = num_polys
+        FOR (idx_poly = 0; idx_poly < num_polys; ++idx_poly) BEGIN
+          SET cur_ofs_poly = ofs_polys + (idx_poly * 18)
+          READ_ASCII cur_ofs_poly $wed(~door~ ~%idx_door%~ ~%poly_name%~ ~%idx_poly%~) (18)
+
+          // parsing polygon vertices
+          READ_LONG (cur_ofs_poly + 0x00) idx_vertices
+          READ_LONG (cur_ofs_poly + 0x04) num_vertices
+          SET $wed(~door~ ~%idx_door%~ ~%poly_name%~ ~%idx_poly%~ ~vertex~) = num_vertices
+          FOR (idx_vtx = 0; idx_vtx < num_vertices; ++idx_vtx) BEGIN
+            READ_LONG (ofs_vertices + (idx_vertices + idx_vtx) * 4) xy
+            SET $wed(~door~ ~%idx_door%~ ~%poly_name%~ ~%idx_poly%~ ~vertex~ ~%idx_vtx%~) = xy
+          END
+        END
+      END
+    END
+
+    // parsing wallpoly
+    SET $wed(~wallpoly~) = num_wallpolys
+    FOR (idx_poly = 0; idx_poly < num_wallpolys; ++idx_poly) BEGIN
+      SET cur_ofs_poly = ofs_wallpolys + (idx_poly * 18)
+      READ_ASCII cur_ofs_poly $wed(~wallpoly~ ~%idx_poly%~) (18)
+
+      // parsing polygon vertices
+      READ_LONG (cur_ofs_poly + 0x00) idx_vertices
+      READ_LONG (cur_ofs_poly + 0x04) num_vertices
+      SET $wed(~wallpoly~ ~%idx_poly%~ ~vertex~) = num_vertices
+      FOR (idx_vtx = 0; idx_vtx < num_vertices; ++idx_vtx) BEGIN
+        READ_LONG (ofs_vertices + (idx_vertices + idx_vtx) * 4) xy
+        SET $wed(~wallpoly~ ~%idx_poly%~ ~vertex~ ~%idx_vtx%~) = xy
+      END
+    END
+  END ELSE BEGIN
+    SET success = 0
+  END
+END
+
+/**
+ * Used internally: Recreates the current WED buffer by assembling the WED array structure.
+ * Wallgroups are automatically recalculated before writing the WED data.
+ *
+ * STR_VAR wed  Name of the WED array structure. (Default: "wed")
+ */
+DEFINE_PATCH_FUNCTION a7#__wed_assemble
+STR_VAR
+  wed = ~wed~
+RET
+  success
+BEGIN
+  SET success = 1
+
+  LPF a7#__wed_validate INT_VAR quick = 0 STR_VAR wed RET success END
+  PATCH_IF (success) BEGIN
+    // rebuilding wallgroups
+    LPF a7#__wed_build_wallgroups STR_VAR wed RET_ARRAY ~%wed%~ END
+
+    // Retrieving WED size and offset values
+    LPF a7#__wed_calculate_structure
+      STR_VAR wed
+      RET
+        size_total
+        size_overlay
+        size_door
+        size_tilemap
+        size_tile_lookup
+        size_wallgroup
+        size_poly
+        size_poly_lookup
+        size_vertex
+        offset_overlay
+        offset_header2
+        offset_door
+        offset_tilemap
+        offset_tile_lookup
+        offset_wallgroup
+        offset_poly
+        offset_poly_lookup
+        offset_vertex
+    END
+
+    // removing old buffer content
+    DELETE_BYTES 0 BUFFER_LENGTH
+
+    // writing WED data
+    INSERT_BYTES 0 size_total
+    WRITE_ASCII 0x00 ~WED V1.3~ (8)
+    // header data
+    WRITE_LONG 0x10 offset_overlay
+    WRITE_LONG 0x14 offset_header2
+    WRITE_LONG 0x18 offset_door
+    WRITE_LONG 0x1c offset_tile_lookup
+    WRITE_LONG (offset_header2 + 0x04) offset_poly
+    WRITE_LONG (offset_header2 + 0x08) offset_vertex
+    WRITE_LONG (offset_header2 + 0x0c) offset_wallgroup
+    WRITE_LONG (offset_header2 + 0x10) offset_poly_lookup
+
+    SET poly_index = 0    // index for wall and door polygons
+    SET lookup_index = 0  // tile lookup index for doors and overlays
+
+    // wall polygons
+    SET num_wallpoly = $~%wed%~(~wallpoly~)
+    WRITE_LONG (offset_header2 + 0x00) num_wallpoly
+    FOR (idx_poly = 0; idx_poly < num_wallpoly; ++idx_poly) BEGIN
+      SPRINT buffer $~%wed%~(~wallpoly~ ~%idx_poly%~)
+      INNER_PATCH_SAVE buffer ~%buffer%~ BEGIN
+        WRITE_LONG 0x00 poly_index
+      END
+      WRITE_ASCIIE offset_poly ~%buffer%~ (18)
+
+      // vertices
+      SET num_vertices = $~%wed%~(~wallpoly~ ~%idx_poly%~ ~vertex~)
+      FOR (idx_vtx = 0; idx_vtx < num_vertices; ++idx_vtx) BEGIN
+        SET value = $~%wed%~(~wallpoly~ ~%idx_poly%~ ~vertex~ ~%idx_vtx%~)
+        SET ofs = offset_vertex + (poly_index + idx_vtx) * 4
+        WRITE_LONG ofs value
+      END
+
+      SET poly_index += num_vertices
+      SET offset_poly += 18
+    END
+
+    // doors
+    SET num_doors = $~%wed%~(~door~)
+    WRITE_LONG 0x0c num_doors
+    FOR (idx_door = 0; idx_door < num_doors; ++idx_door) BEGIN
+      SET num_indices = $~%wed%~(~door~ ~%idx_door%~ ~lookup~)
+      SET num_poly_open = $~%wed%~(~door~ ~%idx_door%~ ~poly_open~)
+      SET num_poly_closed = $~%wed%~(~door~ ~%idx_door%~ ~poly_closed~)
+      SET ofs_poly_open = offset_poly
+      SET ofs_poly_closed = ofs_poly_open + num_poly_open * 18
+
+      SPRINT buffer $~%wed%~(~door~ ~%idx_door%~)
+      INNER_PATCH_SAVE buffer ~%buffer%~ BEGIN
+        WRITE_SHORT 0x0a lookup_index
+        WRITE_SHORT 0x0c num_indices
+        WRITE_SHORT 0x0e num_poly_open
+        WRITE_SHORT 0x10 num_poly_closed
+        WRITE_LONG 0x12 ofs_poly_open
+        WRITE_LONG 0x16 ofs_poly_closed
+      END
+      WRITE_ASCIIE offset_door ~%buffer%~ (26)
+
+      // tile lookup indices
+      FOR (idx_tmi = 0; idx_tmi < num_indices; ++idx_tmi) BEGIN
+        SET value = $~%wed%~(~door~ ~%idx_door%~ ~lookup~ ~%idx_tmi%~)
+        SET ofs = offset_tile_lookup + (lookup_index + idx_tmi) * 2
+        WRITE_SHORT ofs value
+      END
+
+      DEFINE_ARRAY doorpoly_name BEGIN ~poly_open~ ~poly_closed~ END
+      // open and closed polygons
+      FOR (i = 0; i < 2; ++i) BEGIN
+        SPRINT poly_name $doorpoly_name(~%i%~)
+        SET num_polys = $~%wed%~(~door~ ~%idx_door%~ ~%poly_name%~)
+        FOR (idx_poly = 0; idx_poly < num_polys; ++idx_poly) BEGIN
+          SPRINT buffer $~%wed%~(~door~ ~%idx_door%~ ~%poly_name%~ ~%idx_poly%~)
+          INNER_PATCH_SAVE buffer ~%buffer%~ BEGIN
+            WRITE_LONG 0x00 poly_index
+          END
+          WRITE_ASCIIE offset_poly ~%buffer%~ (18)
+
+          // vertices
+          SET num_vertices = $~%wed%~(~door~ ~%idx_door%~ ~%poly_name%~ ~%idx_poly%~ ~vertex~)
+          FOR (idx_vtx = 0; idx_vtx < num_vertices; ++idx_vtx) BEGIN
+            SET value = $~%wed%~(~door~ ~%idx_door%~ ~%poly_name%~ ~%idx_poly%~ ~vertex~ ~%idx_vtx%~)
+            SET ofs = offset_vertex + (poly_index + idx_vtx) * 4
+            WRITE_LONG ofs value
+          END
+
+          SET poly_index += num_vertices
+          SET offset_poly += 18
+        END
+      END
+
+      SET lookup_index += num_indices
+      SET offset_door += 26
+    END
+
+    // overlays
+    SET num_overlays = $~%wed%~(~overlay~)
+    WRITE_LONG 0x08 num_overlays
+    FOR (idx_ovl = 0; idx_ovl < num_overlays; ++idx_ovl) BEGIN
+      SET offset_lookup = offset_tile_lookup + lookup_index * 2
+      SPRINT buffer $~%wed%~(~overlay~ ~%idx_ovl%~)
+      INNER_PATCH_SAVE buffer ~%buffer%~ BEGIN
+        WRITE_LONG 0x10 offset_tilemap
+        WRITE_LONG 0x14 offset_lookup
+      END
+      WRITE_ASCIIE offset_overlay ~%buffer%~ (24)
+
+      // tilemaps
+      SET num_tilemaps = $~%wed%~(~overlay~ ~%idx_ovl%~ ~tm~)
+      SET tm_index = 0
+      FOR (idx_tm = 0; idx_tm < num_tilemaps; ++idx_tm) BEGIN
+        SPRINT buffer $~%wed%~(~overlay~ ~%idx_ovl%~ ~tm~ ~%idx_tm%~)
+        INNER_PATCH_SAVE buffer ~%buffer%~ BEGIN
+          WRITE_SHORT 0x00 tm_index
+        END
+        WRITE_ASCIIE offset_tilemap ~%buffer%~ (10)
+
+        // tile lookup indices
+        SET num_indices = $~%wed%~(~overlay~ ~%idx_ovl%~ ~tm~ ~%idx_tm%~ ~lookup~)
+        FOR (idx_tmi = 0; idx_tmi < num_indices; ++idx_tmi) BEGIN
+          SET value = $~%wed%~(~overlay~ ~%idx_ovl%~ ~tm~ ~%idx_tm%~ ~lookup~ ~%idx_tmi%~)
+          SET ofs = offset_tile_lookup + (lookup_index + tm_index + idx_tmi) * 2
+          WRITE_SHORT ofs value
+        END
+
+        SET tm_index += num_indices
+        SET offset_tilemap += 10
+      END
+
+      SET lookup_index += tm_index
+      SET offset_overlay += 24
+    END
+
+    // wallgroups
+    SET num_wallgroups = $~%wed%~(~wallgroup~)
+    SET poly_lookup_index = 0
+    FOR (idx_wg = 0; idx_wg < num_wallgroups; ++idx_wg) BEGIN
+      SET num_indices = $~%wed%~(~wallgroup~ ~%idx_wg%~)
+      WRITE_SHORT offset_wallgroup poly_lookup_index
+      WRITE_SHORT (offset_wallgroup + 0x02) num_indices
+      FOR (idx_poly = 0; idx_poly < num_indices; ++idx_poly) BEGIN
+        SET value = $~%wed%~(~wallgroup~ ~%idx_wg%~ ~%idx_poly%~)
+        WRITE_SHORT offset_poly_lookup value
+
+        SET offset_poly_lookup += 2
+      END
+
+      SET poly_lookup_index += num_indices
+      SET offset_wallgroup += 4
+    END
+  END ELSE BEGIN
+    SET success = 0
+  END
+END
+
+/**
+ * Used internally: Validates basic elements in the specified WED array structure.
+ *
+ * INT_VAR quick  Whether to do only a quick check. (Default: 1)
+ * STR_VAR wed    Name of the WED array structure. (Default: "wed")
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#__wed_validate
+INT_VAR
+  quick = 1
+STR_VAR
+  wed = ~wed~
+RET
+  success
+BEGIN
+  OUTER_SET success = IS_AN_INT $~%wed%~(~overlay~)
+  OUTER_SET success = success && IS_AN_INT $~%wed%~(~door~)
+  OUTER_SET success = success && IS_AN_INT $~%wed%~(~wallpoly~)
+
+  ACTION_IF (NOT quick && success) BEGIN
+    OUTER_SET num_overlays = $~%wed%~(~overlay~)
+    OUTER_FOR (i = 0; success && i < num_overlays; ++i) BEGIN
+      OUTER_SET success = success && VARIABLE_IS_SET $~%wed%~(~overlay~ ~%i%~)
+      OUTER_SET success = success && IS_AN_INT $~%wed%~(~overlay~ ~%i%~ ~tm~)
+    END
+  END
+
+  ACTION_IF (NOT quick && success) BEGIN
+    OUTER_SET num_doors = $~%wed%~(~door~)
+    OUTER_FOR (i = 0; success && i < num_doors; ++i) BEGIN
+      OUTER_SET success = success && VARIABLE_IS_SET $~%wed%~(~door~ ~%i%~)
+      OUTER_SET success = success && IS_AN_INT $~%wed%~(~door~ ~%i%~ ~lookup~)
+      OUTER_SET success = success && IS_AN_INT $~%wed%~(~door~ ~%i%~ ~poly_open~)
+      OUTER_SET success = success && IS_AN_INT $~%wed%~(~door~ ~%i%~ ~poly_closed~)
+    END
+  END
+
+  ACTION_IF (NOT quick && success) BEGIN
+    OUTER_SET num_polys = $~%wed%~(~wallpoly~)
+    OUTER_FOR (i = 0; success && i < num_polys; ++i) BEGIN
+      OUTER_SET success = success && VARIABLE_IS_SET $~%wed%~(~wallpoly~ ~%i%~)
+      OUTER_SET success = success && IS_AN_INT $~%wed%~(~wallpoly~ ~%i%~ ~vertex~)
+    END
+  END
+END
+
+/**
+ * Used internally: Recreates wallgroups in the specified WED structure.
+ *
+ * STR_VAR wed      Name of the "wed" array.
+ * RET_ARRAY %wed%  The updated "wed" array. (Return value is required to make changes visible outside of the function.)
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#__wed_build_wallgroups
+STR_VAR
+  wed = ~wed~
+RET_ARRAY
+  ~%wed%~
+BEGIN
+  ACTION_IF (IS_AN_INT $~%wed%~(~overlay~)) BEGIN
+    OUTER_SET num_overlays = $~%wed%~(~overlay~)
+    ACTION_IF (num_overlays > 0) BEGIN
+      OUTER_SPRINT overlay $~%wed%~(~overlay~ ~0~)
+      OUTER_PATCH ~%overlay%~ BEGIN
+        READ_SHORT 0x00 width
+        READ_SHORT 0x02 height
+        SET map_width = width * 64
+        SET map_height = height * 64
+      END
+
+      LAF a7#__wed_calculate_wallgroup_count INT_VAR width height RET num_wallgroups = count wg_width = x wg_height = y END
+      OUTER_SET $~%wed%~(~wallgroup~) = num_wallgroups
+      ACTION_IF (num_wallgroups > 0) BEGIN
+        // Wallgroup dimension: 640x480
+        OUTER_SET wg_x = 640
+        OUTER_SET wg_y = 480
+
+        // resetting wallgroup structures
+        OUTER_FOR (wg_idx = 0; wg_idx < num_wallgroups; ++wg_idx) BEGIN
+          OUTER_SET $~%wed%~(~wallgroup~ ~%wg_idx%~) = 0
+        END
+
+        // rebuilding wallgroup definitions
+        // 1. processing wall polygons
+        OUTER_SET num_wallpolys = $~%wed%~(~wallpoly~)
+        OUTER_FOR (idx_poly = 0; idx_poly < num_wallpolys; ++idx_poly) BEGIN
+          // reading poly bounding box
+          OUTER_SPRINT buffer $~%wed%~(~wallpoly~ ~%idx_poly%~)
+          OUTER_PATCH ~%buffer%~ BEGIN LPM a7#__wed_read_poly_bounding_box END
+
+          // adding to matching wallgroups
+          ACTION_IF (is_valid) BEGIN
+            OUTER_SET wg_x_min = min_x / wg_x
+            OUTER_SET wg_x_max = max_x / wg_x
+            OUTER_SET wg_y_min = min_y / wg_y
+            OUTER_SET wg_y_max = max_y / wg_y
+            OUTER_FOR (y = wg_y_min; y <= wg_y_max; ++y) BEGIN
+              OUTER_FOR (x = wg_x_min; x <= wg_x_max; ++x) BEGIN
+                OUTER_SET wg_index = y * wg_width + x
+                ACTION_IF (wg_index < num_wallgroups) BEGIN
+                  OUTER_SET count = $~%wed%~(~wallgroup~ ~%wg_index%~)
+                  OUTER_SET $~%wed%~(~wallgroup~ ~%wg_index%~ ~%count%~) = idx_poly
+                  OUTER_SET $~%wed%~(~wallgroup~ ~%wg_index%~) += 1
+                END
+              END
+            END
+          END
+        END
+
+        // 2. processing (open and closed) door polygons
+        ACTION_DEFINE_ARRAY doorpoly_name BEGIN ~poly_open~ ~poly_closed~ END
+        OUTER_SET poly_offset = num_wallpolys // start index for door polys (update after each open/closed poly section)
+        OUTER_SET num_doors = $~%wed%~(~door~)
+        OUTER_FOR (idx_door = 0; idx_door < num_doors; ++idx_door) BEGIN
+          OUTER_FOR (i = 0; i < 2; ++i) BEGIN
+            OUTER_SPRINT poly_name $doorpoly_name(~%i%~)
+            OUTER_SET num_polys = $~%wed%~(~door~ ~%idx_door%~ ~%poly_name%~)
+            OUTER_FOR (idx_poly = 0; idx_poly < num_polys; ++idx_poly) BEGIN
+              OUTER_SET poly_index = poly_offset + idx_poly
+
+              // reading poly bounding box
+              OUTER_SPRINT buffer $~%wed%~(~door~ ~%idx_door%~ ~%poly_name%~ ~%idx_poly%~)
+              OUTER_PATCH ~%buffer%~ BEGIN LPM a7#__wed_read_poly_bounding_box END
+
+              // adding to matching wallgroups
+              ACTION_IF (is_valid) BEGIN
+                OUTER_SET wg_x_min = min_x / wg_x
+                OUTER_SET wg_x_max = max_x / wg_x
+                OUTER_SET wg_y_min = min_y / wg_y
+                OUTER_SET wg_y_max = max_y / wg_y
+                OUTER_FOR (y = wg_y_min; y <= wg_y_max; ++y) BEGIN
+                  OUTER_FOR (x = wg_x_min; x <= wg_x_max; ++x) BEGIN
+                    OUTER_SET wg_index = y * wg_width + x
+                    ACTION_IF (wg_index < num_wallgroups) BEGIN
+                      OUTER_SET count = $~%wed%~(~wallgroup~ ~%wg_index%~)
+                      OUTER_SET $~%wed%~(~wallgroup~ ~%wg_index%~ ~%count%~) = poly_index
+                      OUTER_SET $~%wed%~(~wallgroup~ ~%wg_index%~) += 1
+                    END
+                  END
+                END
+              END
+            END
+
+            OUTER_SET poly_offset += num_polys
+          END
+        END
+      END
+    END
+  END
+END
+
+/**
+ * Used internally: Calculates the number of wallgroups needed for the specified dimension.
+ *
+ * INT_VAR width    Number of tiles in horizontal direction.
+ * INT_VAR height   Number of tiles in vertical direction.
+ * RET count        Total number of wallgroups.
+ * RET x            Number of wallgroups per row.
+ * RET y            Number of wallgroup rows.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#__wed_calculate_wallgroup_count
+INT_VAR
+  width = 0
+  height = 0
+RET
+  count
+  x
+  y
+BEGIN
+  OUTER_SET count = 0
+  OUTER_SET x = 0
+  OUTER_SET y = 0
+  ACTION_IF (width > 0 && height > 0) BEGIN
+    OUTER_SET wg_x = 640
+    OUTER_SET wg_y = 480
+    OUTER_SET x = (width * 64 + wg_x - 1) / wg_x
+    OUTER_SET y = (height * 64 + wg_y - 1) / wg_y
+    OUTER_SET count = x * y
+  END
+END
+
+/**
+ * Used internally: Determines the bounding box for a given array of vertex definitions.
+ *
+ * INT_VAR count    Number of vertex definitions in the array.
+ * STR_VAR array    Name of the array with vertex definitions.
+ * RET min_x        Minimum x coordinate.
+ * RET max_x        Maximum x coordinate.
+ * RET min_y        Minimum y coordinate.
+ * RET max_y        Maximum y coordinate.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#__wed_calculate_poly_bounding_box
+INT_VAR
+  count = 0
+STR_VAR
+  array = ~~
+RET
+  min_x
+  max_x
+  min_y
+  max_y
+BEGIN
+  OUTER_SET min_x = 0x7fff
+  OUTER_SET max_x = 0
+  OUTER_SET min_y = 0x7fff
+  OUTER_SET max_y = 0
+
+  ACTION_IF (NOT ~%array%~ STR_EQ ~~) BEGIN
+    OUTER_FOR (i = 0; i < count; ++i) BEGIN
+      ACTION_IF (IS_AN_INT $~%array%~(~%i%~)) BEGIN
+        OUTER_SET value = $~%array%~(~%i%~)
+        OUTER_SET x = (value BLSL 16) BASR 16
+        OUTER_SET y = value BASR 16
+        OUTER_SET min_x = (x < min_x) ? x : min_x
+        OUTER_SET max_x = (x > max_x) ? x : max_x
+        OUTER_SET min_y = (y < min_y) ? y : min_y
+        OUTER_SET max_y = (y > max_y) ? y : max_y
+      END
+    END
+  END
+
+  OUTER_SET min_x = (min_x == 0x7fff) ? "-1" : min_x
+  OUTER_SET min_y = (min_y == 0x7fff) ? "-1" : min_y
+END
+
+/**
+ * Used internally: Reads and normalizes the bounding box from the current polygon buffer
+ *
+ * Input variables: map_width, map_height
+ * Output variables: min_x, max_x, min_y, max_y, is_valid
+ */
+DEFINE_PATCH_MACRO a7#__wed_read_poly_bounding_box
+BEGIN
+  READ_SSHORT 0x0a min_x
+  READ_SSHORT 0x0c max_x
+  READ_SSHORT 0x0e min_y
+  READ_SSHORT 0x10 max_y
+
+  SET min_x = (min_x < 0) ? 0 : min_x
+  SET min_x = (min_x >= map_width) ? map_width - 1 : min_x
+
+  SET max_x = (max_x < 0) ? 0 : max_x
+  SET max_x = (max_x >= map_width) ? map_width - 1 : max_x
+
+  SET min_y = (min_y < 0) ? 0 : min_y
+  SET min_y = (min_y >= map_height) ? map_height - 1 : min_y
+
+  SET max_y = (max_y < 0) ? 0 : max_y
+  SET max_y = (max_y >= map_height) ? map_height - 1 : max_y
+
+  PATCH_IF (min_x > max_x) BEGIN SET t = min_x SET min_x = max_x SET max_x = t END
+  PATCH_IF (min_y > max_y) BEGIN SET t = min_y SET min_y = max_y SET max_y = t END
+
+  // determines whether the polygon should be added to a wallgroup
+  SET is_valid = ((max_x - min_x) * (max_y - min_y) > 0)
+END
+
+/**
+ * Used internally: Checks whether the requested door entry exists, based on the specified parameters.
+ *
+ * INT_VAR door_index   Index of the door structure to patch. Omit if you specify the door structure by name.
+ * INT_VAR silent       Specify 1 to suppress any feedback messages. (Default: 0)
+ * STR_VAR wed          Name of the WED handle that is returned by "a7#wed_open" and other batch functions.
+ * STR_VAR door_name    Name of the door structure to patch. Omit if you specify the door structure by index.
+ * RET success          Returns 1 if the operation was successful, 0 otherwise.
+ * RET door_index       Verified door index if the function returns successfully.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#__wed_get_door_index
+INT_VAR
+  door_index = "-1"
+  silent = 0
+STR_VAR
+  wed = ~wed~
+  door_name = ~~
+RET
+  success
+  door_index
+BEGIN
+  OUTER_SET success = 1
+  OUTER_SET num_doors = $~%wed%~(~door~)
+
+  ACTION_IF (success && STRING_LENGTH ~%door_name%~ > 8) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Door name must not exceed 8 characters~
+    END
+  END
+
+  // determining door index from name
+  ACTION_IF (success && NOT ~%door_name%~ STR_EQ ~~) BEGIN
+    OUTER_SET door_index = "-1"
+    OUTER_FOR (idx = 0; idx < num_doors; ++idx) BEGIN
+      OUTER_SPRINT buffer $~%wed%~(~door~ ~%idx%~)
+      OUTER_PATCH ~%buffer%~ BEGIN READ_ASCII 0x00 cur_door_name (8) NULL END
+      ACTION_IF (~%cur_door_name%~ STR_EQ ~%door_name%~) BEGIN
+        OUTER_SET door_index = idx
+        OUTER_SET idx = num_doors
+      END
+    END
+
+    ACTION_IF (door_index < 0) BEGIN
+      OUTER_SET success = 0
+      ACTION_IF (NOT silent) BEGIN
+        WARN ~WARNING: Door not found with the specified name: %door_name%~
+      END
+    END
+  END
+
+  ACTION_IF (success && (door_index < 0 || door_index >= num_doors)) BEGIN
+    OUTER_SET success = 0
+    ACTION_IF (NOT silent) BEGIN
+      WARN ~WARNING: Door index is out of bounds: %door_index%~
+    END
+  END
+END
+
+/**
+ * Used internally: Calculates and returns WED structure information (size and offset values) based on the specified wed array structure.
+ * For correct size calculation the wallgroup section must have been rebuilt.
+ *
+ * STR_VAR wed              Name of the "wed" array.
+ * RET size_total           Total size of the whole WED buffer.
+ * RET size_overlay         Size of the Overlay section.
+ * RET size_door            Size of the Door section.
+ * RET size_tilemap         Size of the Tilemap section.
+ * RET size_tile_lookup     Size of the Tile Lookup Indices section (order: door indices, overlay indices).
+ * RET size_wallgroup       Size of the Wallgroup section.
+ * RET size_poly            Size of the Polygon section (order: wall polygons, door polygons).
+ * RET size_poly_lookup     Size of the Polygon Lookup Indices section.
+ * RET size_vertex          Size of the Vertex section (order: wall poly vertices, door poly vertices).
+ * RET offset_overlay       Absolute start offset of the Overlay section.
+ * RET offset_header2       Absolute start offset of the secondary header block.
+ * RET offset_door          Absolute start offset of the Door section.
+ * RET offset_tilemap       Absolute start offset of the Tilemap section.
+ * RET offset_tile_lookup   Absolute start offset of the Tile Lookup Indices section.
+ * RET offset_wallgroup     Absolute start offset of the Wallgroup section.
+ * RET offset_poly          Absolute start offset of the Polygon section.
+ * RET offset_poly_lookup   Absolute start offset of the Polygon Lookup Indices section.
+ * RET offset_vertex        Absolute start offset of the Vertex section.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#__wed_calculate_structure
+STR_VAR
+  wed = ~wed~
+RET
+  size_total
+  size_overlay
+  size_door
+  size_tilemap
+  size_tile_lookup
+  size_wallgroup
+  size_poly
+  size_poly_lookup
+  size_vertex
+  offset_overlay
+  offset_header2
+  offset_door
+  offset_tilemap
+  offset_tile_lookup
+  offset_wallgroup
+  offset_poly
+  offset_poly_lookup
+  offset_vertex
+BEGIN
+  OUTER_SET size_header = 0x20
+  OUTER_SET size_header2 = 0x14
+  OUTER_SET size_overlay = 0
+  OUTER_SET size_door = 0
+  OUTER_SET size_tilemap = 0
+  OUTER_SET size_tile_lookup = 0
+  OUTER_SET size_wallgroup = 0
+  OUTER_SET size_poly = 0
+  OUTER_SET size_poly_lookup = 0
+  OUTER_SET size_vertex = 0
+
+  // Overlay
+  OUTER_SET num_overlays = $~%wed%~(~overlay~)
+  OUTER_SET size_overlay = num_overlays * 24  // Overlay size
+  OUTER_FOR (idx_ovl = 0; idx_ovl < num_overlays; ++idx_ovl) BEGIN
+    OUTER_SET num_tilemaps = $~%wed%~(~overlay~ ~%idx_ovl%~ ~tm~)
+    OUTER_SET size_tilemap += num_tilemaps * 10 // Tilemap size
+    OUTER_FOR (idx_tm = 0; idx_tm < num_tilemaps; ++idx_tm) BEGIN
+      OUTER_SET num_indices = $~%wed%~(~overlay~ ~%idx_ovl%~ ~tm~ ~%idx_tm%~ ~lookup~)
+      OUTER_SET size_tile_lookup += num_indices * 2 // Tilemap Lookup size
+    END
+  END
+
+  // Door
+  OUTER_SET num_doors = $~%wed%~(~door~)
+  OUTER_SET size_door = num_doors * 26  // Door size
+  OUTER_FOR (idx_door = 0; idx_door < num_doors; ++idx_door) BEGIN
+    OUTER_SET num_indices = $~%wed%~(~door~ ~%idx_door%~ ~lookup~)
+    OUTER_SET size_tile_lookup += num_indices * 2 // Tilemap Lookup size
+
+    ACTION_DEFINE_ARRAY doorpoly_name BEGIN ~poly_open~ ~poly_closed~ END
+    OUTER_FOR (i = 0; i < 2; ++i) BEGIN
+      OUTER_SPRINT poly_name $doorpoly_name(~%i%~)
+      OUTER_SET num_polys = $~%wed%~(~door~ ~%idx_door%~ ~%poly_name%~)
+      OUTER_SET size_poly += num_polys * 18 // Polygon size
+      OUTER_FOR (idx_poly = 0; idx_poly < num_polys; ++idx_poly) BEGIN
+        OUTER_SET num_vertices = $~%wed%~(~door~ ~%idx_door%~ ~%poly_name%~ ~%idx_poly%~ ~vertex~)
+        OUTER_SET size_vertex += num_vertices * 4 // Vertex size
+      END
+    END
+  END
+
+  // Wallpoly
+  OUTER_SET num_polys = $~%wed%~(~wallpoly~)
+  OUTER_SET size_poly += num_polys * 18 // Polygon size
+  OUTER_FOR (idx_poly = 0; idx_poly < num_polys; ++idx_poly) BEGIN
+    OUTER_SET num_vertices = $~%wed%~(~wallpoly~ ~%idx_poly%~ ~vertex~)
+    OUTER_SET size_vertex += num_vertices * 4 // Vertex size
+  END
+
+  // Wallgroup
+  OUTER_SET num_wallgroups = $~%wed%~(~wallgroup~)
+  OUTER_SET size_wallgroup = num_wallgroups * 4 // Wallgroup size
+  OUTER_FOR (idx_wg = 0; idx_wg < num_wallgroups; ++idx_wg) BEGIN
+    OUTER_SET num_polys = $~%wed%~(~wallgroup~ ~%idx_wg%~)
+    OUTER_SET size_poly_lookup += num_polys * 2 // Polygon Lookup Index size
+  END
+
+  // calculating offsets
+  OUTER_SET offset_overlay = size_header
+  OUTER_SET offset_header2 = offset_overlay + size_overlay
+  OUTER_SET offset_door = offset_header2 + size_header2
+  OUTER_SET offset_tilemap = offset_door + size_door
+  OUTER_SET offset_tile_lookup = offset_tilemap + size_tilemap
+  OUTER_SET offset_wallgroup = offset_tile_lookup + size_tile_lookup
+  OUTER_SET offset_poly = offset_wallgroup + size_wallgroup
+  OUTER_SET offset_poly_lookup = offset_poly + size_poly
+  OUTER_SET offset_vertex = offset_poly_lookup + size_poly_lookup
+
+  OUTER_SET size_total = size_header + size_header2
+  OUTER_SET size_total += size_overlay
+  OUTER_SET size_total += size_door
+  OUTER_SET size_total += size_tilemap
+  OUTER_SET size_total += size_tile_lookup
+  OUTER_SET size_total += size_wallgroup
+  OUTER_SET size_total += size_poly
+  OUTER_SET size_total += size_poly_lookup
+  OUTER_SET size_total += size_vertex
+  // LOG ~DEBUG: size_total=%size_total%, size_overlay=%size_overlay%, size_door=%size_door%, size_tilemap=%size_tilemap%, size_tile_lookup=%size_tile_lookup%, size_wallgroup=%size_wallgroup%, size_poly=%size_poly%, size_poly_lookup=%size_poly_lookup%, size_vertex=%size_vertex%~
+END

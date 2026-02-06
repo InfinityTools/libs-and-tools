@@ -1,0 +1,453 @@
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// A library for profiling WeiDU function calls
+//
+// Author:  Argent77
+// License: MIT
+//
+// Copyright 2026 Argent77
+//
+// Permission is hereby granted, free of charge, to any person obtaining 
+// a copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE
+// OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+OUTER_SPRINT A7_PROFILING_VERSION ~1.0~
+
+// !!! Path containing the profiling library: Adjust if needed !!!
+OUTER_SPRINT a7#profiling_include_path ~%MOD_FOLDER%/lib~
+
+// Set variable "a7#profiling_force_legacy" to non-zero before including this library
+// to force loading the legacy method of tracking function calls.
+ACTION_IF ((IS_AN_INT ~WEIDU_VER~ && WEIDU_VER >= 25000) &&
+           (NOT IS_AN_INT ~a7#profiling_force_legacy~ || a7#profiling_force_legacy == 0)) BEGIN
+  INCLUDE ~%a7#profiling_include_path%/a7_profiling-new.tph~
+END ELSE BEGIN
+  INCLUDE ~%a7#profiling_include_path%/a7_profiling-legacy.tph~
+END
+
+
+/**
+ * Action function that patches the specified WeiDU include file with diagnostic functionality.
+ *
+ * The include file must follow a well-formed structure:
+ * - Function header as well as BEGIN and END keywords of the function body:
+ *    - must each be defined in a single line
+ *    - must not be indented
+ *    - must not contain other code or comments
+ * - If "enable_trace" is enabled then parameter definitions and return value definitions must follow this structure:
+ *    - must each be defined in a single line
+ *    - must not contain other code or comments
+ * - No incomplete or ill-formed function/macro definitions in block comments
+ * - If recursive=1: lines with INCLUDE/PATCH_INCLUDE statements must not contain other code or comments
+ *
+ * INT_VAR recursive      Specifies whether to patch INCLUDE'd function in "include_path" as well. (Default: 0)
+ * INT_VAR log_only       Specify 0 to print data to the standard output, or 1 to print data only to the log.
+ *                        This parameter is only effective if "enable_trace" is enabled. (Default: 1)
+ * INT_VAR enable_call    Specifies whether code for counting function/macro calls should be inserted. (Default: 1)
+ *                        CAUTION: Enabling this parameter for a huge number of function calls may lead to a stack overflow eventually on WeiDU 249 or older.
+ * INT_VAR enable_stack   Specifies whether code for tracking function call hierarchies (which function calls which) should be inserted. (Default: 1)
+ *                        CAUTION: Enabling this parameter for a huge number of function calls may lead to a stack overflow eventually on WeiDU 249 or older.
+ * INT_VAR enable_trace   Specifies whether code for printing function calls with their parameter and return values should be inserted. (Default: 0)
+ *                        CAUTION: Enabling this parameter for a huge number of function calls may lead to a stack overflow eventually on WeiDU 249 or older.
+ * INT_VAR enable_timing  Specifies whether code for measuring execution time of the function/macro should be inserted. (Default: 1)
+ * STR_VAR include_path   Path of the include file to patch.
+ * STR_VAR prefix         Optional prefix for calling and timing labels. Prefix is separated by double colons (::) from the timing label,
+ *                        if defined. (Default: empty)
+ * RET include_path       Path of the temporary include file with diagnostic functionality.
+ */
+DEFINE_ACTION_FUNCTION a7#profiling_include
+INT_VAR
+  recursive = 0
+  log_only = 1
+  enable_call = 1
+  enable_stack = 1
+  enable_trace = 0
+  enable_timing = 1
+STR_VAR
+  include_path = ~~
+  prefix = ~~
+RET
+  include_path
+BEGIN
+  ACTION_IF (enable_call || enable_stack || enable_timing) BEGIN
+    ACTION_IF (NOT ~%include_path%~ STR_EQ ~~ && FILE_EXISTS ~%include_path%~) BEGIN
+      ACTION_IF (recursive && ~%prefix%~ STR_EQ ~~) BEGIN
+        LAF RES_OF_FILESPEC STR_VAR filespec = EVAL ~%include_path%~ RET prefix = res END
+      END
+      ACTION_IF (NOT ~%prefix%~ STR_EQ ~~) BEGIN
+        OUTER_SPRINT prefix ~%prefix%::~
+      END
+
+      OUTER_PATCH_SAVE quote   ~ ~ BEGIN WRITE_BYTE 0 0x22 END
+      OUTER_PATCH_SAVE tilde   ~ ~ BEGIN WRITE_BYTE 0 0x7e END
+      OUTER_SPRINT delim ~%quote%%tilde%~
+      OUTER_SPRINT reg_func ~^[ %TAB%]*DEFINE_\(ACTION\|PATCH\|DIMORPHIC\)_\(FUNCTION\|MACRO\)[ %TAB%]+[%delim%]?\([^ %TAB%%WNL%%delim%]+\)[%delim%]?~
+      OUTER_SPRINT reg_include ~^[ %TAB%]*\(\(PATCH_\)?INCLUDE\)[ %TAB%]+\([%delim%]\)\([^ %delim%]+\)\([%delim%]\)~
+
+      LAF FILE_OF_FILESPEC STR_VAR filespec = EVAL ~%include_path%~ RET file END
+      OUTER_SPRINT out_path ~.../inlined/a7_profiling/%file%~
+
+      COPY - ~%include_path%~ ~%out_path%~
+        // handling recursive patching
+        PATCH_IF (recursive) BEGIN
+          SET pos1 = INDEX_BUFFER(CASE_SENSITIVE ~%reg_include%~)
+          WHILE (pos1 >= 0) BEGIN
+            SET pos2 = INDEX_BUFFER(~[%WNL%]~ pos1)
+            SET pos2 = (pos2 < 0) ? BUFFER_LENGTH : pos2
+            READ_ASCII pos1 line (pos2 - pos1)
+            SPRINT line ~%line%~
+            SPRINT path ~~
+            INNER_PATCH ~%line%~ BEGIN
+              EVAL
+              REPLACE_EVALUATE CASE_SENSITIVE ~%reg_include%~ BEGIN
+                SPRINT command ~%MATCH1%~
+                SPRINT delim1 ~%MATCH3%~
+                SPRINT path ~%MATCH4%~
+                SPRINT delim2 ~%MATCH5%~
+              END ~%MATCH0%~
+            END
+            PATCH_IF (NOT ~%path%~ STR_EQ ~~) BEGIN
+              INNER_ACTION BEGIN
+                LAF a7#profiling_include
+                  INT_VAR recursive enable_call enable_stack enable_timing
+                  STR_VAR include_path = EVAL ~%path%~
+                  RET patched_path = include_path
+                END
+              END
+              INNER_PATCH_SAVE patched_line ~%line%~ BEGIN
+                REPLACE_EVALUATE CASE_SENSITIVE ~%reg_include%~ BEGIN
+                  SPRINT command ~%MATCH1%~
+                  SPRINT delim1 ~%MATCH3%~
+                  SPRINT delim2 ~%MATCH5%~
+                END ~%command% %delim1%%patched_path%%delim2%~
+              END
+              SET len = STRING_LENGTH ~%line%~
+              SET patched_len = STRING_LENGTH ~%patched_line%~
+              PATCH_IF (patched_len > len) BEGIN
+                INSERT_BYTES pos1 (patched_len - len)
+              END ELSE PATCH_IF (patched_len < len) BEGIN
+                DELETE_BYTES pos1 (len - patched_len)
+              END
+              WRITE_ASCIIE pos1 ~%patched_line%~ (patched_len)
+            END
+            SET pos1 = INDEX_BUFFER(CASE_SENSITIVE ~%reg_include%~ pos2)
+          END
+        END
+
+        // handling function patching
+        SET pos1 = INDEX_BUFFER(CASE_SENSITIVE ~%reg_func%~)
+        WHILE (pos1 >= 0) BEGIN
+          SET pos2 = INDEX_BUFFER(~[%WNL%]~ pos1)
+          PATCH_IF (pos2 > pos1) BEGIN
+            // preparing profiling code
+            READ_ASCII pos1 header (pos2 - pos1)
+            INNER_PATCH ~%header%~ BEGIN
+              REPLACE_EVALUATE ~%reg_func%~ BEGIN
+                SPRINT scope ~%MATCH1%~
+                SPRINT type ~%MATCH2%~
+                SPRINT name ~%MATCH3%~
+              END ~%MATCH0%~
+            END
+
+            PATCH_IF (~%type%~ STR_EQ ~MACRO~) BEGIN
+              SPRINT func_suffix ~M~
+            END ELSE BEGIN
+              SPRINT func_suffix ~F~
+            END
+
+            PATCH_IF (~%scope%~ STR_EQ ~PATCH~) BEGIN
+              SPRINT func_prefix ~LP~
+              SPRINT time_keyword ~PATCH_TIME~
+            END ELSE BEGIN
+              SPRINT func_prefix ~LA~
+              SPRINT time_keyword ~ACTION_TIME~
+            END
+
+            SPRINT keyword ~%func_prefix%%func_suffix%~
+
+            // fetching list of parameter and return value names
+            SPRINT param_vars ~~  // list of function parameter names
+            SPRINT ret_vars ~~    // list of function return value names
+            PATCH_IF (enable_trace && NOT ~%type%~ STR_EQ ~MACRO~) BEGIN
+              SET start_def = pos2
+              SET end_def = INDEX_BUFFER(CASE_SENSITIVE ~\bBEGIN\b~ pos2)
+              // debug
+              // READ_ASCII start_def debug_block (end_def - start_def)
+              // INNER_PATCH_SAVE debug_block ~%debug_block%~ BEGIN REPLACE_TEXTUALLY ~%MNL%~ ~~ END
+              // PATCH_LOG ~DEBUG: block="%debug_block%"~
+
+              // setting up start offsets of individual function parameter/return sections
+              SET def_types = 4
+              DEFINE_ARRAY def_types BEGIN ~INT_VAR~ ~STR_VAR~ ~RET~ ~RET_ARRAY~ END
+              SET $type_offsets(~%def_types%~) = end_def  // BEGIN
+              FOR (idx = def_types - 1; idx >= 0; --idx) BEGIN
+                SPRINT def_type $def_types(~%idx%~)
+                SET start_type_ofs = INDEX_BUFFER(CASE_SENSITIVE ~\b%def_type%\b~ start_def)
+                PATCH_IF (start_type_ofs >= start_def && start_type_ofs <= end_def) BEGIN
+                  SET $type_offsets(~%idx%~) = start_type_ofs
+                END ELSE BEGIN
+                  SET next_idx = idx + 1
+                  SET $type_offsets(~%idx%~) = $type_offsets(~%next_idx%~)
+                END
+                SPRINT $type_offsets(~%idx%~ ~type~) ~%def_type%~
+
+                // debug
+                // SET ofs = $type_offsets(~%idx%~)
+                // PATCH_LOG ~DEBUG: 2 (type=%def_type%, ofs=%ofs%)~
+              END
+
+              SPRINT reg_param ~~~~~^\([ %TAB%]*\)[~"]?\([^~" %TAB%%WNL%]+\)[~"]?[ %TAB%]*=[ %TAB%]*\([~"]?[^~"]*[~"]?\|[^ %TAB%]+\)~~~~~ // MATCH2: var name
+              SPRINT reg_ret ~~~~~\(^\|[ %TAB%%WNL%]\)[~"]?\([^~" %TAB%%WNL%]+\)[~"]?\([ %TAB%%WNL%]\)~~~~~ // MATCH2: var name
+              FOR (idx = 0; idx < def_types; ++idx) BEGIN
+                SET is_param = (idx < 2)
+                PATCH_IF (is_param) BEGIN
+                  SPRINT reg_pattern ~%reg_param%~
+                  SPRINT output ~param_vars~
+                END ELSE BEGIN
+                  SPRINT reg_pattern ~%reg_ret%~
+                  SPRINT output ~ret_vars~
+                END
+
+                SET next_idx = idx + 1
+                SET start_type_ofs = $type_offsets(~%idx%~)
+                SET end_type_ofs = $type_offsets(~%next_idx%~)
+                PATCH_IF (end_type_ofs > start_type_ofs) BEGIN
+                  // skipping keyword
+                  SPRINT def_type $type_offsets(~%idx%~ ~type~)
+                  SET type_len = STRING_LENGTH ~%def_type%~
+                  SET start_type_ofs = INDEX_BUFFER(CASE_SENSITIVE ~%def_type%~ start_type_ofs) + type_len
+                  READ_ASCII start_type_ofs block (end_type_ofs - start_type_ofs)
+                  // parsing variable names
+                  INNER_PATCH ~%block%~ BEGIN
+                    REPLACE_TEXTUALLY ~//.*$~ ~~  // don't process comments
+                    REPLACE_EVALUATE ~%reg_pattern%~ BEGIN
+                      SPRINT tmp EVAL ~%%output%%~
+                      SPRINT tmp ~%tmp% %MATCH2%~
+                      SPRINT EVAL ~%output%~ ~%tmp%~
+                    END ~%MATCH0%~
+                  END
+                END
+              END
+              // debug
+              // PATCH_LOG ~DEBUG: %keyword% %prefix%%name%(%param_vars%) => %ret_vars%~
+            END
+
+            // setting up profiling code
+            SPRINT profiling_begin ~~
+            SPRINT profiling_end ~~
+            PATCH_IF (enable_trace && NOT ~%type%~ STR_EQ ~MACRO~) BEGIN
+              SPRINT profiling_begin ~%profiling_begin%%WNL%%func_prefix%F a7#profiling_push_trace STR_VAR label="%keyword% %prefix%%name%" param_vars="%param_vars%" END~
+            END
+            PATCH_IF (enable_call) BEGIN
+              SPRINT profiling_begin ~%profiling_begin%%WNL%%func_prefix%F a7#profiling_register_call STR_VAR label="%keyword% %prefix%%name%" END~
+            END
+            PATCH_IF (enable_stack) BEGIN
+              SPRINT profiling_begin ~%profiling_begin%%WNL%%func_prefix%F a7#profiling_stack_call STR_VAR label="%keyword% %prefix%%name%" END~
+            END
+            PATCH_IF (enable_timing) BEGIN
+              SPRINT profiling_begin ~%profiling_begin%%WNL%%time_keyword% "%keyword% %prefix%%name%" BEGIN~
+              SPRINT profiling_end ~%profiling_end%END%WNL%~
+            END
+            PATCH_IF (enable_stack) BEGIN
+              SPRINT profiling_end ~%profiling_end%%func_prefix%F a7#profiling_unstack_call STR_VAR label="%keyword% %prefix%%name%" END%WNL%~
+            END
+            PATCH_IF (enable_trace && NOT ~%type%~ STR_EQ ~MACRO~) BEGIN
+              SPRINT profiling_end ~%profiling_end%%func_prefix%F a7#profiling_pop_trace INT_VAR log_only=%log_only% STR_VAR label="%keyword% %prefix%%name%" ret_vars="%ret_vars%" END%WNL%~
+            END
+            SET len_profiling_begin = STRING_LENGTH ~%profiling_begin%~
+            SET len_profiling_end = STRING_LENGTH ~%profiling_end%~
+
+            // inserting profiling code
+            SET pos1 = INDEX_BUFFER(CASE_SENSITIVE ~\bBEGIN\b~ pos2)
+            PATCH_IF (pos1 >= pos2) BEGIN
+              SET pos1 = INDEX_BUFFER(~[%WNL%]~ pos1)
+              PATCH_IF (pos1 >= 0) BEGIN
+
+                // special: LOCAL_SET/SPRINT definitions in macros must be defined first
+                PATCH_IF (~%type%~ STR_EQ ~MACRO~) BEGIN
+                  SET pos2 = INDEX_BUFFER(CASE_SENSITIVE ~^END~ pos1)
+                  PATCH_IF (pos2 > pos1) BEGIN
+                    SET pos2 = RINDEX_BUFFER(CASE_SENSITIVE ~LOCAL_\(SET\|SPRINT\)~ pos2)
+                    PATCH_IF (pos2 > pos1) BEGIN
+                      SET pos1 = INDEX_BUFFER(~[%WNL%]~ pos2)
+                    END
+                  END
+                END
+
+                INSERT_BYTES pos1 len_profiling_begin
+                WRITE_ASCIIE pos1 ~%profiling_begin%~ (len_profiling_begin)
+                SET pos1 += len_profiling_begin
+
+                SET pos1 = INDEX_BUFFER(CASE_SENSITIVE ~^END~ pos1)
+                PATCH_IF (pos1 >= 0) BEGIN
+                  INSERT_BYTES pos1 len_profiling_end
+                  WRITE_ASCIIE pos1 ~%profiling_end%~ (len_profiling_end)
+                  SET pos1 += len_profiling_end
+
+                  SET pos1 = INDEX_BUFFER(CASE_SENSITIVE ~%reg_func%~ pos1)
+                END
+              END
+            END
+          END ELSE BEGIN
+            SET pos1 = "-1"
+          END
+        END
+
+      OUTER_SPRINT include_path ~%out_path%~
+    END
+  END
+END
+
+/**
+ * Action and patch function that produces a summary of the logged functions calls and prints it to the log or standard output.
+ *
+ * INT_VAR log_only       Whether to print the output only to the log file. (Default: 1)
+ * STR_VAR title          Title of the statistics. (Default: "Statistics:")
+ * STR_VAR call_map_name  Name of the function call statistics map. Leave empty to generate automatically. (Default: empty)
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#profiling_print_function_call_stats
+INT_VAR
+  log_only = 1
+STR_VAR
+  title = ~~
+  call_map_name = ~~
+BEGIN
+  ACTION_IF (~%call_map_name%~ STR_EQ ~~) BEGIN
+    LAF a7#profiling_get_call_map RET_ARRAY call_map END
+    OUTER_SPRINT call_map_name ~call_map~
+  END
+
+  ACTION_IF (~%title%~ STR_EQ ~~) BEGIN
+    OUTER_SPRINT title ~%TAB%%TAB%Statistics~
+  END
+
+  OUTER_SPRINT output ~%title%~
+  ACTION_PHP_EACH EVAL ~%call_map_name%~ AS name => count BEGIN
+    // properly align name and count
+    OUTER_PATCH_SAVE line ~~ BEGIN
+      SET len = STRING_LENGTH ~%name%~
+      SET size = (len < 30) ? 30 : len
+      INSERT_BYTES 0 size
+      FOR (p = 0; p < size; ++p) BEGIN WRITE_BYTE p 32 END
+      WRITE_ASCIIE 0 ~%name%~ (len)
+    END
+    OUTER_SPRINT line ~%line%   %count%~
+    OUTER_SPRINT output ~%output%%LNL%%line%~
+  END
+
+  ACTION_IF (log_only) BEGIN
+    LOG ~%output%~
+  END ELSE BEGIN
+    PRINT ~%output%~
+  END
+END
+
+/**
+ * Action and patch function that produces a summary of the logged function hierarchy calls and prints it to the log or standard output.
+ *
+ * INT_VAR log_only       Whether to print the output only to the log file. (Default: 1)
+ * INT_VAR indent_size    Width (in spaces) of a single function indentation level. (Default: 4)
+ * STR_VAR title          Title of the statistics. (Default: "Statistics:")
+ * STR_VAR call_map_name  Name of the function hierarchy statistics map. Leave empty to generate automatically. (Default: empty)
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#profiling_print_function_hierarchy_stats
+INT_VAR
+  log_only = 1
+  indent_size = 4
+STR_VAR
+  title = ~~
+  hierarchy_map_name = ~~
+BEGIN
+  ACTION_IF (~%hierarchy_map_name%~ STR_EQ ~~) BEGIN
+    LAF a7#profiling_get_hierarchy_map RET_ARRAY hierarchy_map END
+    OUTER_SPRINT hierarchy_map_name ~hierarchy_map~
+  END
+
+  ACTION_IF (~%title%~ STR_EQ ~~) BEGIN
+    OUTER_SPRINT title ~%TAB%%TAB%Statistics~
+  END
+
+  // creating indentation string
+  OUTER_SET indent_size = (indent_size < 1) ? 1 : indent_size
+  OUTER_PATCH_SAVE indent ~~ BEGIN
+    INSERT_BYTES 0 indent_size
+    FOR (ofs = 0; ofs < indent_size; ++ofs) BEGIN WRITE_BYTE ofs 0x20 END
+  END
+
+  OUTER_SPRINT output ~%title%~
+  OUTER_SET lines = 0
+  OUTER_SET max_len = 0
+  OUTER_SET max_len_count = 0
+  ACTION_PHP_EACH EVAL ~%hierarchy_map_name%~ AS name => count BEGIN
+    // 1. count call levels
+    // 2. remove all but the child node
+    OUTER_SET level = 0
+    OUTER_PATCH_SAVE child ~%name%~ BEGIN
+      REPLACE_EVALUATE ~[^>]+>~ BEGIN
+        SET level += 1
+      END ~~
+    END
+
+    // 3. Add "level count" indentations to the output line
+    OUTER_SPRINT line ~~
+    OUTER_FOR (i = 0; i < level; ++i) BEGIN
+      OUTER_SPRINT line ~%line%%indent%~
+    END
+
+    // 4. add child node to output line
+    OUTER_SPRINT line ~%line%%child%~
+
+    // 5. counting string lengths
+    OUTER_SET len = STRING_LENGTH ~%line%~
+    OUTER_SET max_len = (len > max_len) ? len : max_len
+    OUTER_SET len = STRING_LENGTH ~%count%~
+    OUTER_SET max_len_count = (len > max_len_count) ? len : max_len_count
+
+    // 6. add call count to 
+    OUTER_SPRINT line ~%line% %count%~
+    OUTER_SPRINT $lines(~%lines%~) ~%line%~
+    OUTER_SET lines += 1
+  END
+
+  // 7. properly aligning count field
+  OUTER_SET max_len += max_len_count + 2
+  OUTER_FOR (i = 0; i < lines; ++i) BEGIN
+    OUTER_SPRINT line $lines(~%i%~)
+    OUTER_SET len = STRING_LENGTH ~%line%~
+    OUTER_SET add = max_len - len
+    ACTION_IF (add > 0) BEGIN
+      OUTER_PATCH_SAVE spaces ~~ BEGIN
+        INSERT_BYTES 0 add
+        FOR (ofs = 0; ofs < add; ++ofs) BEGIN WRITE_BYTE ofs 0x20 END
+      END
+      OUTER_PATCH_SAVE line ~%line%~ BEGIN
+        SET pos = RINDEX_BUFFER(~[^0-9]~ len)
+        PATCH_IF (pos >= 0) BEGIN
+          INSERT_BYTES pos add
+          WRITE_ASCIIE pos ~%spaces%~ (add)
+        END
+      END
+    END
+    OUTER_SPRINT output ~%output%%LNL%%line%~
+  END
+
+  ACTION_IF (log_only) BEGIN
+    LOG ~%output%~
+  END ELSE BEGIN
+    PRINT ~%output%~
+  END
+END

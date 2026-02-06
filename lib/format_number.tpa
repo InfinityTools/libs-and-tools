@@ -1,0 +1,154 @@
+// Function Overview:
+// Converts a numeric value into a notation based on the specified parameters.
+// DEFINE_DIMORPHIC_FUNCTION format_number
+
+// Converts a custom notation of a value into the numeric value based on the specified parameters.
+// DEFINE_DIMORPHIC_FUNCTION unformat_number
+
+
+/**
+ * Converts a numeric value into a notation based on the specified parameters.
+ *
+ * INT_VAR number     The numeric value to convert into a specific notation.
+ * INT_VAR radix      The radix (base) of a single digit in the range [2, 36]. Default: 10
+ * INT_VAR min_digits Minimum number of digits to return. Adds leading zeroes if needed to meet the criterium. Default: 1
+ * INT_VAR lower_case Indicates whether to return lowercased digits. This option is only relevant for radix > 10. Default: 0
+ * STR_VAR prefix     A custom prefix to add to the result. Default: none
+ * STR_VAR suffix     A custom suffix to add to the result. Default: none
+ * RET result         The formatted number in the specified notation.
+ */
+DEFINE_DIMORPHIC_FUNCTION format_number
+INT_VAR
+  number = 0
+  radix = 10
+  min_digits = 1
+  lower_case = 0
+STR_VAR
+  prefix = ~~
+  suffix = ~~
+RET
+  result
+BEGIN
+  OUTER_SPRINT result ~~
+  OUTER_SPRINT digits ~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ~
+
+  OUTER_SET radix = (radix < 2) ? 2 : (radix > 36) ? 36 : radix
+
+  OUTER_SET is_negative = (number < 0)
+  OUTER_SET number = ABS number
+
+  OUTER_PATCH ~%digits%~ BEGIN
+    WHILE (number != 0) BEGIN
+      SET idx = number MODULO radix
+      READ_ASCII idx digit (1)
+      SPRINT result ~%digit%%result%~
+      SET number /= radix
+    END
+
+    PATCH_IF (~%result%~ STR_EQ ~~) BEGIN
+      SPRINT result ~0~
+    END
+
+    PATCH_IF (lower_case) BEGIN
+      TO_LOWER ~result~
+    END
+
+    SET len = STRING_LENGTH ~%result%~
+    WHILE (len < min_digits) BEGIN
+      SPRINT result ~0%result%~
+      SET len += 1
+    END
+
+    SPRINT result ~%prefix%%result%%suffix%~
+
+    PATCH_IF (is_negative) BEGIN
+      SPRINT result ~-%result%~
+    END
+  END
+END
+
+
+/**
+ * Converts a custom notation of a value into the numeric value based on the specified parameters.
+ *
+ * INT_VAR radix      The radix (base) of a single digit in the notation string (range [2, 36]). Default: 10
+ * STR_VAR notation   The notation string that should be converted into a numeric value. Case of extended digits that
+ *                    are represented as alphabetic characters is ignored.
+ *                    Note: Conversion is terminated with a warning if the notation string contains unexpected characters.
+ * STR_VAR prefix     A prefix that may be included in the notation string. Default: none
+ * STR_VAR suffix     A suffix that may be included in the notation string. Default: none
+ * RET number         The numeric value derived from the notation string.
+ */
+DEFINE_DIMORPHIC_FUNCTION unformat_number
+INT_VAR
+  radix = 10
+STR_VAR
+  notation = ~~
+  prefix = ~~
+  suffix = ~~
+RET
+  number
+BEGIN
+  OUTER_SET number = 0
+  OUTER_SET radix = (radix < 2) ? 2 : (radix > 36) ? 36 : radix
+
+  OUTER_PATCH ~%notation%~ BEGIN
+    SET len = BUFFER_LENGTH
+
+    // processing sign
+    SET signed = (len > 0 && (BYTE_AT 0) == 45)
+    PATCH_IF (signed) BEGIN
+      DELETE_BYTES 0 1
+      SET len -= 1
+    END
+
+    // processing prefix
+    SET plen = STRING_LENGTH ~%prefix%~
+    PATCH_IF (plen > 0 && len >= plen) BEGIN
+      READ_ASCII 0 s (plen)
+      PATCH_IF (~%s%~ STR_EQ ~%prefix%~) BEGIN
+        DELETE_BYTES 0 plen
+        SET len -= plen
+      END
+    END
+
+    // processing suffix
+    SET slen = STRING_LENGTH ~%suffix%~
+    PATCH_IF (slen > 0 && len >= slen) BEGIN
+      READ_ASCII (len - slen) s (slen)
+      PATCH_IF (~%s%~ STR_EQ ~%suffix%~) BEGIN
+        DELETE_BYTES (len - slen) slen
+        SET len -= slen
+      END
+    END
+
+    // processing number
+    WHILE (len > 0) BEGIN
+      READ_BYTE 0 digit
+      DELETE_BYTES 0 1
+      SET len -= 1
+      PATCH_IF (digit >= 97 && digit <= 122) BEGIN
+        // a..z
+        SET digit -= 87
+      END ELSE PATCH_IF (digit >= 65 && digit <= 90) BEGIN
+        // A..Z
+        SET digit -= 55
+      END ELSE PATCH_IF (digit >= 48 && digit <= 57) BEGIN
+        // 0..9
+        SET digit -= 48
+      END ELSE BEGIN
+        PATCH_WARN ~WARNING: Invalid digit encountered in "%notation%". Terminating conversion.~
+        SET digit = 0
+        SET len = 0
+      END
+
+      SET number *= radix
+      SET number += digit
+    END
+
+    // applying sign
+    PATCH_IF (signed) BEGIN
+      SET number = 0 - number
+    END
+  END
+END

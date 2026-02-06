@@ -1,0 +1,208 @@
+/**
+ * Action and patch function that adds a new entry to SPLPROT.2DA and returns its index. If an identical
+ * entry already exists it will return the index of that entry instead.
+ *
+ * INT_VAR stat         A code from STATS.IDS or an extended stat code starting at 0x100 (256).
+ * INT_VAR auto_label   Specify 1 to automatically generate a descriptive label for the SPLPROT entry.
+ *                      Specify 0 to use entry index and "label" parameter as entry label. (Default: 1)
+ * STR_VAR value        Either a numeric value that is evaluated by "stat", or a default value "*" for
+ *                      specific stats. (Default: "*")
+ *                      Note: "-1" indicates a user-defined value.
+ * STR_VAR relation     Specifies how to evaluate the value. (Default: "*")
+ *                      Note: Not all extended stats require a relation code. Use "*" in this case.
+ * STR_VAR label        An optional label that is added to the value in the first column if "auto_label" is 0.
+ *                      The label must not contain spaces. (Default: empty)
+ * RET index            Entry number that can be used to refer to this operation in various effect opcodes.
+ *                      Returns -1 if the entry could not be successfully retrieved from or added to SPLPROT.2DA.
+ */
+DEFINE_DIMORPHIC_FUNCTION add_splprot_entry
+INT_VAR
+  stat        = "-1"
+  auto_label  = 1
+STR_VAR
+  value       = ~*~
+  relation    = ~*~
+  label       = ~~
+RET
+  index
+BEGIN
+  OUTER_SET index = "-1"
+
+  ACTION_IF (stat >= 0) BEGIN
+    ACTION_IF (~%value%~ STR_EQ ~~) BEGIN
+      OUTER_TEXT_SPRINT value ~*~
+    END
+
+    ACTION_IF (~%relation%~ STR_EQ ~~) BEGIN
+      OUTER_TEXT_SPRINT relation ~*~
+    END
+
+    COPY_EXISTING ~splprot.2da~ ~override~
+      READ_2DA_ENTRIES_NOW splprot 4
+      // Searching for identical entries
+      FOR (idx = 0; idx < splprot; idx += 1) BEGIN
+        READ_2DA_ENTRY_FORMER splprot idx 1 cur_stat
+        PATCH_IF (IS_AN_INT ~cur_stat~ && cur_stat == stat) BEGIN
+          READ_2DA_ENTRY_FORMER splprot idx 2 cur_value
+          PATCH_IF ((IS_AN_INT ~cur_value~ && IS_AN_INT ~value~ && cur_value == value) ||
+                    (~%cur_value%~ STR_EQ ~%value%~)) BEGIN
+            READ_2DA_ENTRY_FORMER splprot idx 3 cur_relation
+            PATCH_IF ((IS_AN_INT ~cur_relation~ && IS_AN_INT ~relation~ && cur_relation == relation) ||
+                      (~%cur_relation%~ STR_EQ ~%relation%~)) BEGIN
+              SET index = idx
+              SET idx = splprot
+            END
+          END
+        END
+      END
+
+      PATCH_IF (index < 0) BEGIN
+        // preparing index value
+        PATCH_IF (auto_label) BEGIN
+          LPF __get_splprot_autolabel INT_VAR index = splprot stat STR_VAR value relation RET name = label END
+        END ELSE BEGIN
+          SET name = splprot
+          PATCH_IF (NOT ~%label%~ STR_EQ ~~) BEGIN
+            INNER_PATCH_SAVE label ~%label%~ BEGIN REPLACE_TEXTUALLY ~[ %TAB%%WNL%]~ ~_~ END
+            SPRINT name ~%name%_%label%~
+          END
+        END
+
+        // Adding new entry
+        PATCH_IF (stat >= 0x100) BEGIN
+          SPRINTF stat_hex ~%x~ (stat)
+          TEXT_SPRINT line ~%name%        %stat_hex%        %value%        %relation%~
+        END ELSE BEGIN
+          TEXT_SPRINT line ~%name%        %stat%        %value%        %relation%~
+        END
+        INSERT_2DA_ROW splprot 4 ~%line%~
+        SET index = splprot
+      END
+    BUT_ONLY IF_EXISTS
+  END
+END
+
+
+// Used internally: Generates a descriptive SPLPROT entry label.
+DEFINE_DIMORPHIC_FUNCTION __get_splprot_autolabel
+INT_VAR
+  index     = 0
+  stat      = "-1"
+STR_VAR
+  value     = ~*~
+  relation  = ~*~
+RET
+  label
+BEGIN
+  OUTER_SPRINT label ~%index%~
+
+  // get relation description
+  ACTION_DEFINE_ARRAY rel_descs BEGIN "<=" "=" "<" ">" ">=" "!=" "BITS<=" "BITS>=" "BITS=" "BITS!=" "BITS>" "BITS<" END
+  ACTION_IF (IS_AN_INT ~relation~ && VARIABLE_IS_SET $rel_descs(~%relation%~)) BEGIN
+    OUTER_SPRINT rel_desc $rel_descs(~%relation%~)
+  END ELSE BEGIN
+    OUTER_SPRINT rel_desc ~??~
+  END
+
+  // get value description
+  ACTION_IF (IS_AN_INT ~value~ && value == "-1") BEGIN
+    OUTER_SPRINT value_desc ~n~
+  END ELSE BEGIN
+    OUTER_SPRINT value_desc ~%value%~
+  END
+
+  ACTION_MATCH stat WITH
+    0x100 BEGIN OUTER_SPRINT label ~%label%_SOURCE~ END
+    0x101 BEGIN OUTER_SPRINT label ~%label%_!SOURCE~ END
+    0x102 BEGIN OUTER_SPRINT label ~%label%_PERSONALSPACE%rel_desc%%value_desc%~ END
+    0x103 BEGIN OUTER_SPRINT label ~%label%_ENTRIES=(%value_desc%||%relation%)~ END
+    0x104 BEGIN OUTER_SPRINT label ~%label%_ENTRIES!=(%value_desc%||%relation%)~ END
+    0x105 BEGIN
+      ACTION_IF (IS_AN_INT ~relation~ && relation == 1) BEGIN
+        OUTER_SPRINT label ~%label%_MORALALIGNMENT_MATCHESCASTER~
+      END ELSE ACTION_IF (IS_AN_INT ~relation~ && relation == 5) BEGIN
+        OUTER_SPRINT label ~%label%_!MORALALIGNMENT_MATCHESCASTER~
+      END ELSE BEGIN
+        OUTER_SPRINT label ~%label%_MORALALIGNMENT%rel_desc%%value_desc%~
+      END
+    END
+    0x106 BEGIN
+      OUTER_PATCH ~~ BEGIN LOOKUP_IDS_SYMBOL_OF_INT ids_desc ~AREATYPE~ value END
+      OUTER_SPRINT label ~%label%_AREATPYE%rel_desc%%ids_desc%~
+    END
+    0x107 BEGIN OUTER_SPRINT label ~%label%_TIMEOFDAY=%value_desc%-%relation%~ END
+    0x108 BEGIN
+      ACTION_IF (IS_AN_INT ~relation~ && relation == 1) BEGIN
+        OUTER_SPRINT label ~%label%_ETHICALALIGNMENT_MATCHESCASTER~
+      END ELSE ACTION_IF (IS_AN_INT ~relation~ && relation == 5) BEGIN
+        OUTER_SPRINT label ~%label%_!ETHICALALIGNMENT_MATCHESCASTER~
+      END ELSE BEGIN
+        OUTER_SPRINT label ~%label%_ETHICALALIGNMENT%rel_desc%%value_desc%~
+      END
+    END
+    0x109 BEGIN OUTER_SPRINT label ~%label%_EVASIONCHECK~ END
+    0x10a BEGIN
+      OUTER_PATCH ~~ BEGIN LOOKUP_IDS_SYMBOL_OF_INT ids_desc ~EA~ value END
+      OUTER_SPRINT label ~%label%_EA%rel_desc%%ids_desc%~
+    END
+    0x10b BEGIN
+      OUTER_PATCH ~~ BEGIN LOOKUP_IDS_SYMBOL_OF_INT ids_desc ~GENERAL~ value END
+      OUTER_SPRINT label ~%label%_GENERAL%rel_desc%%ids_desc%~
+    END
+    0x10c BEGIN
+      OUTER_PATCH ~~ BEGIN LOOKUP_IDS_SYMBOL_OF_INT ids_desc ~RACE~ value END
+      OUTER_SPRINT label ~%label%_RACE%rel_desc%%ids_desc%~
+    END
+    0x10d BEGIN
+      OUTER_PATCH ~~ BEGIN LOOKUP_IDS_SYMBOL_OF_INT ids_desc ~CLASS~ value END
+      OUTER_SPRINT label ~%label%_CLASS%rel_desc%%ids_desc%~
+    END
+    0x10e BEGIN
+      OUTER_PATCH ~~ BEGIN LOOKUP_IDS_SYMBOL_OF_INT ids_desc ~SPECIFIC~ value END
+      OUTER_SPRINT label ~%label%_SPECIFIC%rel_desc%%ids_desc%~
+    END
+    0x10f BEGIN
+      OUTER_PATCH ~~ BEGIN LOOKUP_IDS_SYMBOL_OF_INT ids_desc ~GENDER~ value END
+      OUTER_SPRINT label ~%label%_GENDER%rel_desc%%ids_desc%~
+    END
+    0x110 BEGIN
+      OUTER_PATCH ~~ BEGIN LOOKUP_IDS_SYMBOL_OF_INT ids_desc ~ALIGN~ value END
+      OUTER_SPRINT label ~%label%_ALIGNMENT%rel_desc%%ids_desc%~
+    END
+    0x111 BEGIN
+      OUTER_PATCH ~~ BEGIN LOOKUP_IDS_SYMBOL_OF_INT ids_desc ~STATE~ value END
+      OUTER_SPRINT label ~%label%_STATE%rel_desc%%ids_desc%~
+    END
+    0x112 BEGIN
+      OUTER_PATCH ~~ BEGIN LOOKUP_IDS_SYMBOL_OF_INT ids_desc ~SPLSTATE~ value END
+      OUTER_SPRINT label ~%label%_SPLSTATE%rel_desc%%ids_desc%~
+    END
+    0x113 BEGIN
+      ACTION_IF (IS_AN_INT ~relation~ && relation == 1) BEGIN
+        OUTER_SPRINT label ~%label%_ALLIES~
+      END ELSE ACTION_IF (IS_AN_INT ~relation~ && relation == 5) BEGIN
+        OUTER_SPRINT label ~%label%_!ALLIES~
+      END ELSE BEGIN
+        OUTER_SPRINT label ~%label%_ALLIES%rel_desc%%value_desc%~
+      END
+    END
+    0x114 BEGIN
+      ACTION_IF (IS_AN_INT ~relation~ && relation == 1) BEGIN
+        OUTER_SPRINT label ~%label%_ENEMIES~
+      END ELSE ACTION_IF (IS_AN_INT ~relation~ && relation == 5) BEGIN
+        OUTER_SPRINT label ~%label%_!ENEMIES~
+      END ELSE BEGIN
+        OUTER_SPRINT label ~%label%_ENEMIES%rel_desc%%value_desc%~
+      END
+    END
+    0x115 BEGIN OUTER_SPRINT label ~%label%_SUMMONEDNUM%rel_desc%%value_desc%~ END
+    0x116 BEGIN OUTER_SPRINT label ~%label%_CHAPTER%rel_desc%%value_desc%~ END
+    DEFAULT
+      ACTION_IF (stat >= 0 && stat < 256) BEGIN
+        OUTER_PATCH ~~ BEGIN LOOKUP_IDS_SYMBOL_OF_INT ids_desc ~STATS~ stat END
+        OUTER_SPRINT label ~%label%_%ids_desc%%rel_desc%%value_desc%~
+      END ELSE BEGIN
+        OUTER_SPRINT label ~%label%_UNKNOWN_%stat%%rel_desc%%value_desc%~
+      END
+  END
+END

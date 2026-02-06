@@ -1,0 +1,265 @@
+// Function Overview:
+// Converts an arbitrary non-negative decimal number into a hexadecimal representation. The function handles numbers of any size.
+// DEFINE_DIMORPHIC_FUNCTION a7#dec_to_hex
+
+// Converts an arbitrary number in non-negative hexadecimal notation into a decimal representation. The function handles numbers of any size.
+// DEFINE_DIMORPHIC_FUNCTION a7#hex_to_dec
+
+
+/**
+ * Converts an arbitrary non-negative decimal number into a hexadecimal representation.
+ * The function handles numbers of any size.
+ *
+ * INT_VAR min_digits   Specifies the minimum number of digits the returned hexadecimal number should have. (Default: 0)
+ * INT_VAR upper_case   Specifies whether the returned value should contain upper-case letters. (Default: 0 - lower-case)
+ * STR_VAR dec_number   Non-negative decimal number of arbitrary size.
+ * STR_VAR prefix       Prefix for the hexadecimal representation. (Default: "0x")
+ * RET hex_number       Returns "dec_number" in hexadecimal notation.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#dec_to_hex
+INT_VAR
+  min_digits = 0
+  upper_case = 0
+STR_VAR
+  dec_number = ~0~
+  prefix = ~0x~
+RET
+  hex_number
+BEGIN
+  ACTION_IF (~%dec_number%~ STRING_MATCHES_REGEXP ~^[0-9]+$~ == 0 && NOT ~%dec_number%~ STR_EQ ~0~) BEGIN
+    ACTION_IF (IS_AN_INT ~number~) BEGIN
+      // number in supported range: let WeiDU handle conversion
+      OUTER_PATCH ~~ BEGIN SPRINTF hex_number ~%x~ (dec_number) END
+      OUTER_PATCH_SAVE hex_number ~%hex_number%~ BEGIN DELETE_BYTES 0 2 END
+    END ELSE BEGIN
+      // perform manual conversion
+      OUTER_SPRINT hex_number ~~
+      OUTER_SPRINT current ~%dec_number%~
+      OUTER_WHILE (NOT ~%current%~ STR_EQ ~0~) BEGIN
+        LAF a7#divide_by_16 STR_VAR number = EVAL ~%current%~ RET remainder current = division_result END
+        LAF a7#hex_to_char INT_VAR number = remainder RET digit END
+        OUTER_SPRINT hex_number ~%digit%%hex_number%~
+      END
+    END
+  END ELSE BEGIN
+    // 0 or not a valid decimal number
+    OUTER_SPRINT hex_number ~0~
+  END
+
+  OUTER_SET hex_len = STRING_LENGTH ~%hex_number%~
+  OUTER_WHILE (hex_len < min_digits) BEGIN
+    OUTER_SPRINT hex_number ~0%hex_number%~
+    OUTER_SET hex_len += 1
+  END
+
+  ACTION_IF (upper_case) BEGIN
+    ACTION_TO_UPPER ~hex_number~
+  END
+
+  OUTER_SPRINT hex_number ~%prefix%%hex_number%~
+END
+
+
+/**
+ * Converts an arbitrary number in non-negative hexadecimal notation into a decimal representation.
+ * The function handles numbers of any size.
+ *
+ * STR_VAR hex_number   Non-negative number in hexadecimal notation of arbitrary size. Hex prefix is supported.
+ * RET dec_number       Returns "hex_number" in decimal notation.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#hex_to_dec
+STR_VAR
+  hex_number = ~0~
+RET
+  dec_number
+BEGIN
+  ACTION_IF (~%hex_number%~ STRING_MATCHES_REGEXP ~^0[xX].*~ == 0) BEGIN
+    OUTER_PATCH_SAVE hex_number ~%hex_number%~ BEGIN DELETE_BYTES 0 2 END
+  END
+
+  ACTION_IF (~%hex_number%~ STRING_MATCHES_REGEXP ~^[0-9A-Fa-f]+$~ == 0 && NOT ~%hex_number%~ STR_EQ ~0~) BEGIN
+    OUTER_SPRINT hex_value ~0x%hex_number%~
+    ACTION_IF (IS_AN_INT ~hex_value~ && hex_value >= 0) BEGIN
+      // number in supported range: let WeiDU handle conversion
+      OUTER_SET dec_number = hex_value
+    END ELSE BEGIN
+      // perform manual conversion
+      OUTER_SPRINT dec_number ~0~
+
+      OUTER_SET hex_len = STRING_LENGTH ~%hex_number%~
+      OUTER_PATCH ~%hex_number%~ BEGIN
+        FOR (i = 0; i < hex_len; ++i) BEGIN
+          READ_BYTE i char
+          LPF a7#hex_char_to_int INT_VAR char RET value END
+          LPF a7#multiply_by_int INT_VAR multiplier = 16 STR_VAR number = EVAL ~%dec_number%~ RET dec_number = result END
+          LPF a7#add_int INT_VAR value STR_VAR number = EVAL ~%dec_number%~ RET dec_number = result END
+        END
+      END
+    END
+  END ELSE BEGIN
+    // 0 or not a valid hexadecimal number
+    OUTER_SPRINT dec_number ~0~
+  END
+END
+
+
+/**
+ * Processes a single chunk of the original number.
+ *
+ * STR_VAR number       Number to divide, in string format.
+ * RET remainder        Remainder of the division, as integer.
+ * RET division_result  Result of the division, as string.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#divide_by_16
+STR_VAR
+  number = ~0~      // number to divide
+RET
+  remainder         // returned as integer
+  division_result   // returned as string
+BEGIN
+  ACTION_IF (~%number%~ STRING_MATCHES_REGEXP ~^[0-9]+$~ == 0) BEGIN
+    // valid integer number in decimal notation
+    OUTER_SET ZERO = 48
+    OUTER_SPRINT quotient ~~
+    OUTER_SET quotient_len = 0
+    OUTER_SET remainder = 0
+
+    OUTER_SET len = STRING_LENGTH ~%number%~
+    OUTER_PATCH ~%number%~ BEGIN
+      FOR (ofs = 0; ofs < len; ++ofs) BEGIN
+        SET digit = (BYTE_AT ofs) - ZERO
+        SET value = remainder * 10 + digit
+        SET q = value >> 4
+        SET remainder = value & 0xf
+        SET quotient_len = STRING_LENGTH ~%quotient%~
+        PATCH_IF (NOT (quotient_len == 0 && q == 0)) BEGIN
+          SPRINT quotient ~%quotient%%q%~
+          SET quotient_len = STRING_LENGTH ~%quotient%~
+        END
+      END
+    END
+
+    ACTION_IF (quotient_len == 0) BEGIN
+      OUTER_SPRINT division_result ~0~
+    END ELSE BEGIN
+      OUTER_SPRINT division_result ~%quotient%~
+    END
+  END ELSE BEGIN
+    OUTER_SPRINT remainder ~0~
+    OUTER_SPRINT division_result ~0~
+  END
+END
+
+
+/**
+ * Maps a decimal value in range [0, 15] to a hexadecimal digit (in lower-case letters).
+ *
+ * INT_VAR number   Numeric value to convert.
+ * RET digit        Hexadecimal digit with lower-case letters.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#hex_to_char
+INT_VAR
+  number = 0
+RET
+  digit
+BEGIN
+  ACTION_DEFINE_ARRAY hex_digit BEGIN ~0~ ~1~ ~2~ ~3~ ~4~ ~5~ ~6~ ~7~ ~8~ ~9~ ~a~ ~b~ ~c~ ~d~ ~e~ ~f~ END
+  OUTER_SET idx = number & 0xf
+  OUTER_SPRINT digit $hex_digit(~%idx%~)
+END
+
+
+/**
+ * Multiplies a decimal number (as string) by a small integer.
+ *
+ * INT_VAR multiplier   Integer value to multiply "number" with.
+ * STR_VAR number       Number as string to multiply.
+ * RET result           Result of the multiplication.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#multiply_by_int
+INT_VAR
+  multiplier = 16
+STR_VAR
+  number = ~0~
+RET
+  result
+BEGIN
+  OUTER_SET ZERO = 48
+  OUTER_SPRINT result ~~
+  OUTER_SET carry = 0
+  OUTER_SET number_len = STRING_LENGTH ~%number%~
+
+  OUTER_PATCH ~%number%~ BEGIN
+    FOR (i = number_len - 1; i >= 0; --i) BEGIN
+      SET digit = (BYTE_AT i) - ZERO
+      SET prod = digit * multiplier + carry
+      SET rem = prod MODULO 10
+      SPRINT result ~%rem%%result%~
+      SET carry = prod / 10
+    END
+
+    WHILE (carry > 0) BEGIN
+      SET rem = carry MODULO 10
+      SPRINT result ~%rem%%result%~
+      SET carry /= 10
+    END
+  END
+END
+
+
+/**
+ * Adds a small integer in range [0, 15] to a large number (as string).
+ *
+ * INT_VAR value    Small numeric value to add.
+ * STR_VAR number   Number as string.
+ * RET result       Result of the add operation.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#add_int
+INT_VAR
+  value = 0
+STR_VAR
+  number = ~0~
+RET
+  result
+BEGIN
+  OUTER_SET ZERO = 48
+  OUTER_SPRINT result ~~
+  OUTER_SET carry = value
+  OUTER_SET i = STRING_LENGTH ~%number%~ - 1
+
+  OUTER_PATCH ~%number%~ BEGIN
+    WHILE (i >= 0 || carry > 0) BEGIN
+      SET digit = (i >= 0) ? (BYTE_AT i) - ZERO : 0
+      SET sum = digit + carry
+      SET rem = sum MODULO 10
+      SPRINT result ~%rem%%result%~
+      SET carry = sum / 10
+      SET i -= 1
+    END
+  END
+END
+
+
+/**
+ * Converts a hex digit into a decimal value in range [0, 15].
+ *
+ * INT_VAR char   Ascii code of the character.
+ * RET value      Decimal representation of the character.
+ */
+DEFINE_DIMORPHIC_FUNCTION a7#hex_char_to_int
+INT_VAR
+  char = 0
+RET
+  value
+BEGIN
+  ACTION_IF (char >= 48 && char < 58) BEGIN
+    OUTER_SET value = char - 48
+  END ELSE ACTION_IF (char >= 65 && char < 71) BEGIN
+    OUTER_SET value = char - 65 + 10
+  END ELSE ACTION_IF (char >= 97 && char < 103) BEGIN
+    OUTER_SET value = char - 97 + 10
+  END ELSE BEGIN
+    WARN ~WARNING: Invalid char value: %char%~
+    OUTER_SET value = 0
+  END
+END

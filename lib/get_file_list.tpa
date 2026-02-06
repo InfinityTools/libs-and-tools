@@ -1,0 +1,73 @@
+/**
+ * An action and patch function that scans the given folder, optionally recursively, for files matching a
+ * regular expression pattern and returns them in a list.
+ *
+ * INT_VAR recursive    Specify non-zero value to search files recursively. (Default: 1)
+ * STR_VAR path         Initial path to scan for files. (Default: current game directory)
+ * STR_VAR pattern      Regular expression pattern to filter files. (Default: ".+")
+ * RET folders          Number of folders with files matching "pattern" .
+ * RET files            Number of files in "path" and optional subfolders matching "pattern".
+ * RET_ARRAY folders    List of folders with files matching "pattern" (full path relative to game directory).
+ * RET_ARRAY files      List of files in "path" and optional subfolders matching "pattern"
+ *                      (full path relative to game directory).
+ */
+DEFINE_DIMORPHIC_FUNCTION GET_FILE_LIST
+INT_VAR
+  recursive = 1
+STR_VAR
+  path = ~.~
+  pattern = ~.+~
+RET
+  folders
+  files
+RET_ARRAY
+  folders
+  files
+BEGIN
+  OUTER_SET folders = 0
+  OUTER_SET files = 0
+
+  ACTION_IF (NOT ~%path%~ STR_EQ ~~) BEGIN
+    // collecting folders to scan
+    OUTER_SET scanned_folders = 0
+    OUTER_SPRINT $scanned_folders(~%scanned_folders%~) ~%path%~
+    OUTER_SET scanned_folders += 1
+
+    ACTION_IF (recursive) BEGIN
+      OUTER_SET cur_index = 0
+      OUTER_WHILE (cur_index < scanned_folders) BEGIN
+        OUTER_SET cur_folders = scanned_folders
+        OUTER_FOR (i = cur_index; i < cur_folders; ++i) BEGIN
+          ACTION_CLEAR_ARRAY ~items~
+          OUTER_SPRINT path $scanned_folders(~%i%~)
+          GET_DIRECTORY_ARRAY items ~%path%~ ~.+~
+          ACTION_PHP_EACH items AS _ => item BEGIN
+            // skipping special folders "." and ".."
+            ACTION_IF (~%item%~ STRING_MATCHES_REGEXP ~.*\.\.?$~ != 0) BEGIN
+              OUTER_SPRINT $scanned_folders(~%scanned_folders%~) ~%item%~
+              OUTER_SET scanned_folders += 1
+            END
+          END
+        END
+        OUTER_SET cur_index = cur_folders
+      END
+    END
+
+    // collecting files and folders
+    OUTER_FOR (i = 0; i < scanned_folders; ++i) BEGIN
+      ACTION_CLEAR_ARRAY ~items~
+      OUTER_SPRINT path $scanned_folders(~%i%~)
+      OUTER_SET found = 0
+      GET_FILE_ARRAY items ~%path%~ ~%pattern%~
+      ACTION_PHP_EACH items AS _ => item BEGIN
+        ACTION_IF (NOT found) BEGIN
+          OUTER_SET found = 1
+          OUTER_SPRINT $folders(~%folders%~) ~%path%~
+          OUTER_SET folders += 1
+        END
+        OUTER_SPRINT $files(~%files%~) ~%item%~
+        OUTER_SET files += 1
+      END
+    END
+  END
+END
