@@ -72,7 +72,7 @@ find_weidu() {
 }
 
 # Function: Resolves a given path string to an existing path. Path is assumed to be relative to $game_dir.
-# Parameters: @1=tp2_path; @2=game_path
+# Parameters: @1=game_path; @2=tp2_path
 # Return value: resolved "tp2_path" string if available, empty string otherwise.
 eval_path() {
   # resolve path string
