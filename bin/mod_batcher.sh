@@ -25,7 +25,7 @@
 ########################################
 
 # Version of mod_batcher
-app_version="1.1-20260206"
+app_version="1.2-20260209"
 
 # Function: Prints the help text to standard output.
 # Parameters: none
@@ -45,9 +45,14 @@ show_help() {
   echo "  -b <path>       Path of the WeiDU binary to use for the operation. Omit this"
   echo "                  option to use the WeiDU binary found in the current directory"
   echo "                  or system path instead."
+  echo "  -c              Combine logs of all components of a mod into one log file."
+  echo "                  Omit this option to create separate .debug log files for each"
+  echo "                  mod component."
   echo "  -g <path>       Specifies the game directory (where chitin.key can be found)."
   echo "                  Omit this option to use the current directory instead."
   echo "  -l              Print output of the mod operations to a timestamped log file."
+  echo "  -o <path>       Path for the generated log files. Omit to generate log files"
+  echo "                  in the \"debugs\" folder."
   echo "  -p              Just print the mod components for installation and exit."
   echo "  -x              Also log output from external commands invoked by WeiDU."
   echo "  --              Does nothing. Use this option as placeholder to uninstall"
@@ -174,14 +179,29 @@ parse_log_entry() {
 }
 
 # Function: Generates a .DEBUG filename from the specified tp2 file path.
-# Parameters: $1=TP2 file path
+# Parameters: $1=TP2 file path; @2=component id (default: empty); @3=whether to combine logs (default: 0); $4=prefix (default: "setup")
 # Return value: *.debug filename
 get_debug_filename() {
   if [[ $# -gt 0 ]]; then
+    local prefix="setup"
+    if [[ $# -gt 3 ]]; then
+      prefix="$4"
+    fi
+
+    local combine=0
+    if [[ $# -gt 2 && "$3" == "1" ]]; then
+      combine=1
+    fi
+
+    local suffix=""
+    if [[ $# -gt 1 && $combine -eq 0 ]]; then
+      suffix="-$2"
+    fi
+
     local filename=$(basename -- "$1" | tr '[:upper:]' '[:lower:]')
     local filename="${filename#setup-}"
     local filename="${filename%.*}"
-    echo "setup-${filename}.debug"
+    echo "${log_dir}/${prefix}-${filename}${suffix}.debug"
   fi
 }
 
@@ -210,7 +230,7 @@ get_timestamp() {
 }
 
 # Function: Prints the given string to standard out and, depending on script options, to a log file.
-# Parameters: $1=string to print; $2=severity [0=message, 1=warning, 2=error] (default: 0)
+# Parameters: $1=string to print; $2=severity [0=message, 1=warning, 2=error] (default: 0); $3=stdout only (default: 0)
 # Return value: input string with optional severity prefix
 log() {
   if [[ $# -gt 0 ]]; then
@@ -228,9 +248,14 @@ log() {
       esac
     fi
 
+    local stdout_only=0
+    if [[ $# -gt 2 && $3 -ne 0 ]]; then
+      stdout_only=1
+    fi
+
     local msg="${prefix}${1}"
-    if [[ -n "$batcher_log" ]]; then
-      echo "$msg" >>$batcher_log
+    if [[ $stdout_only -eq 0 && -n "$batcher_log" ]]; then
+      echo "$msg" >>"$batcher_log"
     fi
     echo "$msg"
   fi
@@ -257,8 +282,14 @@ batcher_redirect=/dev/null
 # Store whether to remove currently installed mods (Default: remove installed mods first)
 remove_first=1
 
+# Store whether to combine debug logs of individual mod components into a single log
+combine_logs=0
+
 # Store whether to only print mod components to standard output (Default: install mod components for real)
 print_only=0
+
+# Store directory where log files should be generated (Default: "debugs" folder)
+log_dir="debugs"
 
 # Store weidu log with mod components to install (Default: empty log file path)
 logfile=
@@ -278,12 +309,15 @@ while [[ $# -ne 0 ]]; do
         if [[ -x "$1" ]]; then
           weidu_bin="$1"
         else
-          log "Specified WeiDU binary not found. Skipping." 1
+          log "Specified WeiDU binary not found. Skipping." 1 1
         fi
       else
-        log "Option -b specified without WeiDU binary path." 2
+        log "Option -b specified without WeiDU binary path." 2 1
         exit 1
       fi
+      ;;
+    -c)
+      combine_logs=1
       ;;
     -g)
       shift
@@ -291,16 +325,25 @@ while [[ $# -ne 0 ]]; do
         if [[ -d "$1" ]]; then
           game_dir="$1"
         else
-          log "Specified path is not a directory. Skipping." 1
+          log "Specified path is not a directory. Skipping." 1 1
         fi
       else
-        log "Option -g specified without game directory." 2
+        log "Option -g specified without game directory." 2 1
         exit 1
       fi
       ;;
     -l)
       batcher_log="mod_batcher-$(get_timestamp)"
       batcher_redirect="$batcher_log"
+      ;;
+    -o)
+      shift
+      if [[ $# -ne 0 ]]; then
+        log_dir="$1"
+      else
+        log "Option -o specified without log directory." 2 1
+        exit 1
+      fi
       ;;
     -p)
       print_only=1
@@ -328,7 +371,7 @@ while [[ $# -ne 0 ]]; do
         if [[ -f "$1" ]]; then
           logfile="$1"
         else
-          log "Log file not found: $1" 2
+          log "Log file not found: $1" 2 1
           exit 1
         fi
       fi
@@ -337,22 +380,38 @@ while [[ $# -ne 0 ]]; do
   shift
 done
 
+
 # Check if valid game directory
 if [[ -z "$(find "$game_dir" -maxdepth 1 -iname chitin.key)" ]]; then
-  log "Not a valid game directory: $game_dir" 2
+  log "Not a valid game directory: $game_dir" 2 1
   exit 1
 fi
 
 # WeiDU.log file is required
 if [[ -n "$logfile" && ! -f "$logfile" ]]; then
-  log "Log file not found: $logfile" 2
+  log "Log file not found: $logfile" 2 1
   exit 1
 fi
 
 # WeiDU binary is required
 if [[ -z "$weidu_bin" ]]; then
-  log "WeiDU binary not found." 2
+  log "WeiDU binary not found." 2 1
   exit 1
+fi
+
+# Log folder should exist
+if [[ ! -d "$log_dir" ]]; then
+  mkdir "$log_dir" || (
+    log_dir="."
+    log "Log directory could not be created. Using current working directory." 1 1
+  )
+fi
+log_dir=$(realpath -s "$log_dir")
+
+# Redirect log output to correct path
+if [[ -n "$batcher_log" ]]; then
+  batcher_log="$log_dir/$batcher_log"
+  batcher_redirect="$batcher_log"
 fi
 
 # performing operation
@@ -376,6 +435,7 @@ cd "$game_dir"
 if [[ -n "$logfile" ]]; then
   parse_log "$logfile" "log_weidu"
 fi
+
 
 # removing installed mods
 if [[ $remove_first -ne 0 && -f "$game_dir/weidu.log" ]]; then
@@ -406,7 +466,7 @@ if [[ $remove_first -ne 0 && -f "$game_dir/weidu.log" ]]; then
     for (( i=${#log_uninstall[@]} - 1; i >= 0; i-- )); do
       parse_log_entry "$game_dir" "${log_uninstall[i]}" "entry_uninstall"
       if [[ ${#entry_uninstall[@]} -gt 0 ]]; then
-        debug_file=$(get_debug_filename "${entry_uninstall[0]}")
+        debug_file=$(get_debug_filename "${entry_uninstall[0]}" "${entry_uninstall[2]}" $combine_logs "remove")
         opt_append=$(append_debug_file "$debug_file")
         if [[ ! -f "$debug_file" ]]; then
           touch "$debug_file" # workaround to fix file access modes
@@ -419,7 +479,7 @@ if [[ $remove_first -ne 0 && -f "$game_dir/weidu.log" ]]; then
         fi
         log "$output"
 
-        "$weidu_bin" --force-uninstall ${entry_uninstall[2]} $opt_append $opt_extern --log "$debug_file" "${entry_uninstall[0]}" 2>&1 | tee -a $batcher_redirect
+        "$weidu_bin" --force-uninstall ${entry_uninstall[2]} $opt_append $opt_extern --log "$debug_file" "${entry_uninstall[0]}" 2>&1 | tee -a "$batcher_redirect"
         if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
           log "Failed to uninstall \"${entry_uninstall[0]}\", component ${entry_uninstall[2]}." 2
           popd >/dev/null
@@ -470,7 +530,7 @@ if [[ -n "$logfile" ]]; then
     for (( i = 0; i < ${#log_weidu[@]}; i++ )); do
       parse_log_entry "$game_dir" "${log_weidu[i]}" "entry_weidu"
       if [[ ${#entry_weidu[@]} -gt 0 ]]; then
-        debug_file=$(get_debug_filename "${entry_weidu[0]}")
+        debug_file=$(get_debug_filename "${entry_weidu[0]}" "${entry_weidu[2]}" $combine_logs "setup")
         opt_append=$(append_debug_file "$debug_file")
         if [[ ! -f "$debug_file" ]]; then
           touch "$debug_file" # workaround to fix file access modes
@@ -483,7 +543,7 @@ if [[ -n "$logfile" ]]; then
         fi
         log "$output"
 
-        "$weidu_bin" --language ${entry_weidu[1]} --force-install ${entry_weidu[2]} $opt_append $opt_extern --log "$debug_file" "${entry_weidu[0]}" 2>&1 | tee -a $batcher_redirect
+        "$weidu_bin" --language ${entry_weidu[1]} --force-install ${entry_weidu[2]} $opt_append $opt_extern --log "$debug_file" "${entry_weidu[0]}" 2>&1 | tee -a "$batcher_redirect"
         if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
           log "Failed to install \"${entry_weidu[0]}\", component ${entry_weidu[2]}." 2
           popd >/dev/null

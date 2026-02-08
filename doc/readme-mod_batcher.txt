@@ -1,7 +1,7 @@
 Mod Batcher (Shell Script)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Version:  1.1-20260206
+Version:  1.2-20260209
 Author:   Argent77
 License:  MIT
 
@@ -76,6 +76,13 @@ currently installed mods first, and logs the whole operation to the file "mod_ba
 
 Changelog
 ---------
+
+Version 1.2
+- Changed default logging method to create individual debug logs for each mod component
+- Changed default log file directory to "debugs" folder
+- Changed debug file prefix for uninstalled mod components to "remove"
+- Added option to combine logs for all components of a mod into a single file
+- Added option to specify an output directory for log files
 
 Version 1.1
 - Added readme
