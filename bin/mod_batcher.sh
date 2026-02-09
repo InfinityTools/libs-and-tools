@@ -213,7 +213,7 @@ declare -A debug_files
 # Return value: "--logapp" if debug file is already in use, empty string otherwise.
 # Global: Updates associative array "debug_files" accordingly.
 append_debug_file() {
-  if [[ $# -gt 0 ]]; then
+  if [[ $# -gt 0 && $combine_logs -ne 0 ]]; then
     if [[ -v debug_files["$1"] ]]; then
       echo "--logapp"
     else
