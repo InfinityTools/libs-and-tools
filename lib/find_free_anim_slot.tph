@@ -1,8 +1,10 @@
-OUTER_SPRINT FIND_FREE_ANIM_SLOT_VERSION ~2.0~
+OUTER_SPRINT FIND_FREE_ANIM_SLOT_VERSION ~2.1~
 
 /**
  * Action and patch function that returns the first unoccupied creature animation slot in the defined range or
- * of the defined animation type. This function only supports EE games from patch version 2.0 and higher.
+ * of the defined animation type.
+ *
+ * This function supports all EE games and original BG2 with TobEx AfterLife.
  *
  * INT_VAR slot_min   Lower bound of the requested animation slot range for creature animations.
  *                    Optional, if "type" parameter is specified.
@@ -49,7 +51,7 @@ BEGIN
   OUTER_SET slot = "-1"
   OUTER_SET slot_step = (slot_step < 1) ? 1 : slot_step
 
-  OUTER_SET valid_game = (FILE_EXISTS ~engine.lua~ && GAME_IS ~bgee bg2ee eet iwdee pstee~)
+  OUTER_SET valid_game = (FILE_EXISTS_IN_GAME ~extanim.2da~) || (FILE_EXISTS ~engine.lua~ && GAME_IS ~bgee bg2ee eet iwdee pstee~)
 
   ACTION_IF (NOT valid_game) BEGIN
     WARN ~Game is not supported.~
@@ -153,7 +155,19 @@ BEGIN
     OUTER_PATCH_SAVE hex ~%hex%~ BEGIN DELETE_BYTES 0 2 END
     OUTER_WHILE (STRING_LENGTH ~%hex%~ < 4) BEGIN OUTER_SPRINT hex ~0%hex%~ END
 
+    // try ini files first
     OUTER_SET success = NOT FILE_EXISTS_IN_GAME ~%hex%.ini~
+
+    ACTION_IF (success) BEGIN
+      // try EXTANIM.2DA entries next
+      COPY_EXISTING ~extanim.2da~ ~override~
+        SET match = 0
+        REPLACE_EVALUATE ~^[ %TAB%]*\(0[xX][0-9a-fA-F]+\|[0-9]+\)[ %TAB%]+-?[0-9]+[ %TAB%]+-?[0-9]+~ BEGIN
+          SET match = match || (IS_AN_INT ~MATCH1~ && value == MATCH1)
+        END ~%MATCH0%~
+        SET success = NOT match
+      BUT_ONLY IF_EXISTS
+    END
   END
 END
 

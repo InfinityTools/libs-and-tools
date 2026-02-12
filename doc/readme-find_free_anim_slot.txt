@@ -1,6 +1,6 @@
 WeiDU function: FIND_FREE_ANIM_SLOT
 
-Version:  2.0
+Version:  2.1
 Author:   Argent77
 License:  MIT
 
@@ -10,7 +10,7 @@ DEFINE_DIMORPHIC_FUNCTION FIND_FREE_ANIM_SLOT
 Action and patch function that returns the first unoccupied creature animation slot in the defined range or of the
 defined animation type.
 
-Note: This function only supports EE games from patch version 2.0 and higher.
+Note: This function supports all EE games and original BG2 with TobEx AfterLife.
 
 INT_VAR slot_min      Lower bound of the requested animation slot range for creature animations.
                       Optional, if "type" parameter is specified.
