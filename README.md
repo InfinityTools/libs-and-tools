@@ -66,3 +66,7 @@ Collection of popular regular expression character codes and classes.
 ### res_types.tpa
 
 Resource types supported by Infinity Engine games.
+
+### diagnostic.lua
+
+Lua script with diagnostic functions. It can be used for troubleshooting Lua code in UI.MENU or the various Lua scripts in the EE games.
