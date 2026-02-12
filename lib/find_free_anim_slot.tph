@@ -168,43 +168,110 @@ BEGIN
         SET success = NOT match
       BUT_ONLY IF_EXISTS
     END
+
+    ACTION_IF (success) BEGIN
+      // try ANISND.IDS entries last
+      COPY_EXISTING ~anisnd.ids~ ~override~
+        SET match = 0
+        REPLACE_EVALUATE ~^[ %TAB%]*\(0[xX][0-9a-fA-F]+\|[0-9]+\)[ %TAB%]+\([^ %TAB%]+\)[ %TAB%]+~ BEGIN
+          PATCH_IF (NOT match && IS_AN_INT ~MATCH1~ && value == MATCH1) BEGIN
+            SET len = STRING_LENGTH ~%MATCH2%~
+            PATCH_IF (len > 5 && ~%MATCH2%~ STRING_MATCHES_REGEXP ~^.+_..$~ == 0) BEGIN
+              // removing palette override from resref
+              LPF SUBSTRING INT_VAR start = 0 length = len - 3 STR_VAR string = EVAL ~%MATCH2%~ RET MATCH2 = substring END
+            END
+            LPF __ANIM_RESOURCE_EXISTS INT_VAR value STR_VAR resref = EVAL ~%MATCH2%~ RET match = success END
+          END
+        END ~%MATCH0%~
+        SET success = NOT match
+      BUT_ONLY IF_EXISTS
+    END
+  END
+END
+
+/**
+ * Used internally: Resolves given slot value and resref parameters into a creature animation file
+ *                  and returns 1 if it exists in the game.
+ */
+DEFINE_DIMORPHIC_FUNCTION __ANIM_RESOURCE_EXISTS
+INT_VAR
+  value = "-1"
+STR_VAR
+  resref = ~~
+RET
+  success
+BEGIN
+  OUTER_SET success = 0
+  ACTION_IF (value >= 0 && value <= 0xffff && NOT ~%resref%~ STR_EQ ~~) BEGIN
+    ACTION_FOR_EACH type IN ~effect~ ~monster_quadrant~ ~monster_multi~ ~multi_new~
+                            ~monster_layered_spell~ ~monster_ankheg~ ~town_static~
+                            ~character~ ~character_old~ ~monster~ ~monster_old~
+                            ~monster_layered~ ~monster_large~ ~monster_large16~
+                            ~ambient_static~ ~ambient~ ~flying~ ~monster_icewind~
+                            ~monster_planescape~
+    BEGIN
+      ACTION_IF (NOT success) BEGIN
+        OUTER_SET num_entries = IS_AN_INT $anim_slot_types(~%type%~) ? $anim_slot_types(~%type%~) : 0
+        OUTER_FOR (i = 0; NOT success && i < num_entries; ++i) BEGIN
+          OUTER_SET slot_min = $anim_slot_types(~%type%~ ~%i%~ ~base~)
+          OUTER_SET slot_max = slot_min | $anim_slot_types(~%type%~ ~%i%~ ~mask~)
+          ACTION_IF (value >= slot_min && value <= slot_max) BEGIN
+            OUTER_FOR (j = 0; NOT success && VARIABLE_IS_SET $anim_slot_types(~%type%~ ~suffix~ ~%j%~); ++j) BEGIN
+              OUTER_SPRINT file $anim_slot_types(~%type%~ ~suffix~ ~%j%~)
+              OUTER_SPRINT file ~%resref%%file%.bam~
+              OUTER_SET success = FILE_EXISTS_IN_GAME ~%file%~
+            END
+          END
+        END
+      END
+    END
   END
 END
 
 
-// Available animation types and associated slot ranges
+// Available animation types and associated slot ranges.
+// "suffix" definitions are used to check for existing creature animation resources in the game.
 ACTION_DEFINE_ASSOCIATIVE_ARRAY anim_slot_types BEGIN
   ~effect~ => 1
+  ~effect~, ~suffix~, 0 => ~~
   ~effect~, 0, ~base~ => 0x0000
   ~effect~, 0, ~mask~ => 0x0fff
 
   ~monster_quadrant~ => 1
+  ~monster_quadrant~, ~suffix~, 0 => ~g11~
   ~monster_quadrant~, 0, ~base~ => 0x1000
   ~monster_quadrant~, 0, ~mask~ => 0x01ff
 
   ~monster_multi~ => 2
+  ~monster_multi~, ~suffix~, 0 => ~g11~
+  ~monster_multi~, ~suffix~, 1 => ~1100~
   ~monster_multi~, 0, ~base~ => 0x1200
   ~monster_multi~, 0, ~mask~ => 0x00ff
   ~monster_multi~, 1, ~base~ => 0x1400
   ~monster_multi~, 1, ~mask~ => 0x0bff
 
   ~multi_new~ => 1
+  ~multi_new~, ~suffix~, 0 => ~g11~
   ~multi_new~, 0, ~base~ => 0x1300
   ~multi_new~, 0, ~mask~ => 0x00ff
 
   ~monster_layered_spell~ => 1
+  ~monster_layered_spell~, ~suffix~, 0 => ~g1~
   ~monster_layered_spell~, 0, ~base~ => 0x2000
   ~monster_layered_spell~, 0, ~mask~ => 0x0fff
 
   ~monster_ankheg~ => 1
+  ~monster_ankheg~, ~suffix~, 0 => ~g1~
   ~monster_ankheg~, 0, ~base~ => 0x3000
   ~monster_ankheg~, 0, ~mask~ => 0x0fff
 
   ~town_static~ => 1
+  ~town_static~, ~suffix~, 0 => ~~
   ~town_static~, 0, ~base~ => 0x4000
   ~town_static~, 0, ~mask~ => 0x0fff
 
   ~character~ => 4
+  ~character~, ~suffix~, 0 => ~1g1~
   ~character~, 0, ~base~ => 0x5000
   ~character~, 0, ~mask~ => 0x03ff
   ~character~, 1, ~base~ => 0x5500
@@ -215,6 +282,7 @@ ACTION_DEFINE_ASSOCIATIVE_ARRAY anim_slot_types BEGIN
   ~character~, 3, ~mask~ => 0x00ff
 
   ~character_old~ => 4
+  ~character_old~, ~suffix~, 0 => ~1g1~
   ~character_old~, 0, ~base~ => 0x5400
   ~character_old~, 0, ~mask~ => 0x00ff
   ~character_old~, 1, ~base~ => 0x5600
@@ -226,35 +294,46 @@ ACTION_DEFINE_ASSOCIATIVE_ARRAY anim_slot_types BEGIN
 
   // placeholder: created dynamically below
   ~monster~ => 0
+  ~monster~, ~suffix~, 0 => ~g1~
 
   // placeholder: created dynamically below
   ~monster_old~ => 0
+  ~monster_old~, ~suffix~, 0 => ~g1~
 
   ~monster_layered~ => 1
+  ~monster_layered~, ~suffix~, 0 => ~g1~
   ~monster_layered~, 0, ~base~ => 0x8000
   ~monster_layered~, 0, ~mask~ => 0x0fff
 
   ~monster_large~ => 1
+  ~monster_large~, ~suffix~, 0 => ~g1~
   ~monster_large~, 0, ~base~ => 0x9000
   ~monster_large~, 0, ~mask~ => 0x0fff
 
   ~monster_large16~ => 1
+  ~monster_large16~, ~suffix~, 0 => ~g1~
   ~monster_large16~, 0, ~base~ => 0xa000
   ~monster_large16~, 0, ~mask~ => 0x0fff
 
   ~ambient_static~ => 1
+  ~ambient_static~, ~suffix~, 0 => ~g1~
   ~ambient_static~, 0, ~base~ => 0xb000
   ~ambient_static~, 0, ~mask~ => 0x0fff
 
   ~ambient~ => 1
+  ~ambient~, ~suffix~, 0 => ~g1~
   ~ambient~, 0, ~base~ => 0xc000
   ~ambient~, 0, ~mask~ => 0x0fff
 
   ~flying~ => 1
+  ~flying~, ~suffix~, 0 => ~~
+  ~flying~, ~suffix~, 1 => ~g1~
   ~flying~, 0, ~base~ => 0xd000
   ~flying~, 0, ~mask~ => 0x0fff
 
   ~monster_icewind~ => 1
+  ~monster_icewind~, ~suffix~, 0 => ~sd~
+  ~monster_icewind~, ~suffix~, 1 => ~wk~
   ~monster_icewind~, 0, ~base~ => 0xe000
   ~monster_icewind~, 0, ~mask~ => 0x0fff
 
